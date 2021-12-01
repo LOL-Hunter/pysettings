@@ -1,0 +1,2269 @@
+﻿import tkinter.messagebox as msg
+import tkinter.colorchooser as colorChooser
+import tkinter.filedialog as fd
+import tkinter.scrolledtext as _text
+import tkinter.ttk as ttk
+import tkinter as _tk_
+from typing import Union, Callable
+from datetime import date
+
+try:
+    from ..geometry import Location2D, _map
+except ImportError:
+    from pysettings.geometry import Location2D, _map
+import os
+from enum import Enum
+import random as r
+import time as t
+#TODO Cannot bind two same events!!!
+#Check Entry Content: https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/entry-validation.html
+#System-Tray: https://www.tutorialspoint.com/how-to-create-a-system-tray-icon-of-a-tkinter-application
+#icon zb askyesno
+#ttk.Styles ???
+#spinBox scrollable + onScrollEvent
+#finish calendar
+#key: https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/key-names.html
+#Scrollbar: https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/scrollbar.html
+#def clone(self): -> widget
+
+#TEMPLATES
+#-Keyboard
+#statisc tamplate
+
+"""
+# Various canvas styles
+PIESLICE='pieslice'
+CHORD='chord'
+ARC='arc'
+FIRST='first'
+LAST='last'
+BUTT='butt'
+PROJECTING='projecting'
+ROUND='round'
+BEVEL='bevel'
+MITER='miter'
+
+"""
+
+
+class TKExceptions:
+    class InvalidFileExtention(Exception):
+        pass
+    class PathNotExisits(Exception):
+        pass
+    class InvalidUsageException(Exception):
+        pass
+    class InvalidHeaderException(Exception):
+        pass
+    class InvalidWidgetTypeException(Exception):
+        pass
+class Symbol:
+    DICE_1 = "\u2680"
+    DICE_2 = "\u2681"
+    DICE_3 = "\u2682"
+    DICE_4 = "\u2683"
+    DICE_5 = "\u2684"
+    DICE_6 = "\u2685"
+class FontType(Enum):
+    ARIAL ="arial"
+class Orient(Enum):
+    HORIZONTAL = "horizontal"
+    VERTICAL = "vertical"
+class Style(Enum):
+    DEFAULT = "none"
+    FLAT = "flat"
+    SOLID = "solid"
+    RAISED = "raised"
+    SUNKEN = "sunken"
+    GROOVE = "groove"
+    RIDGE = "ridge"
+class Anchor(Enum):
+    NW = UP_LEFT = "nw"
+    NE = UP_RIGHT = "ne"
+    SW = DOWN_LEFT = "sw"
+    SE = DOWN_RIGHT = "se"
+    CENTER = MIDDLE = "center"
+    N = UP = "n"
+    E = RIGHT = "e"
+    S = DOWN = "s"
+    W = LEFT = "w"
+class Color(Enum):
+    DEFAULT = "#F0F0F0"
+    WHITE = "white"
+    BLACK = "black"
+    RED = "red"
+    GREEN = "green"
+    BLUE = "blue"
+    CYAN = "cyan"
+    YELLOW = "yellow"
+    MAGENTA = "magenta"
+    @staticmethod
+    def rgb(r, g, b):
+        return '#%02x%02x%02x' % (r, g, b)
+    @staticmethod
+    def hex(hex:str):
+        return hex
+class Wrap(Enum):
+    NONE = "none"
+    WORD = "word"
+    CHAR = "char"
+class Cursor(Enum):
+    NONE = "none"
+    WIN_DEFAULT = "arrow"
+    WIN_TURN = "exchange"
+    WIN_FOUR_ARROW = "fleur"
+    WIN_LOADING = "watch"
+    WIN_CROSS = "tcross"
+    WIN_CLICK_HAND = "hand2"
+    WIN_MARK_TEXT = "xterm"
+
+    SHAPE_CIRCLE = "circle"
+    SHAPE_CROSS = "cross"
+    SHAPE_DOTBOX = "dotbox"
+    SHAPE_PLUS = "plus"
+
+    CUSTOM_CLOCK = "clock"
+    CUSTOM_HEART = "heart"
+    CUSTOM_MAN = "man"
+    CUSTOM_MOUSE = "mouse"
+    CUSTOM_PIRATE = "pirate"
+    CUSTOM_SHUTTLE = "shuttle"
+    CUSTOM_SIZING = "sizing"
+    CUSTOM_SPIDER = "spider"
+    CUSTOM_SPRAYCAN = "spraycan"
+    CUSTOM_STAR = "star"
+    CUSTOM_TARGET = "target"
+    CUSTOM_TRECK = "trek"
+class Key(Enum):
+    SHIFT = "<Shift>"
+    RETURN = "<Return>"
+    DOWN = "<Down>"
+    RIGHT = "<Right>"
+    LEFT = "<Left>"
+    UP = "<Up>"
+class Mouse(Enum):
+    MOUSE_MOTION = "<Motion>"
+    WHEEL_MOTION = "<MouseWheel>"
+
+    LEFT_CLICK_RELEASE = "<ButtonRelease-1>"
+    RIGHT_CLICK_RELEASE = "<ButtonRelease-2>"
+    MIDDLE_CLICK_RELEASE = "<ButtonRelease-2>"
+
+    LEFT_CLICK_PRESS = "<ButtonPress-1>"
+    RIGHT_CLICK_PRESS = "<ButtonPress-2>"
+    MIDDLE_CLICK_PRESS = "<ButtonPress-2>"
+
+    LEFT_CLICK = "<Button-1>"
+    RIGHT_CLICK = "<Button-3>"
+    MIDDLE_CLICK = "<Button-2>"
+
+    MOTION_WITH_LEFT_CLICK = "<B1-Motion>"
+    MOTION_WITH_RIGHT_CLICK = "<B2-Motion>"
+    MOTION_WITH_MIDDLE_CLICK = "<B3-Motion>"
+
+    DOUBBLE_LEFT = "<Double-Button-1>"
+    DOUBBLE_RIGHT = "<Double-Button-2>"
+    DOUBBLE_MIDDLE = "<Double-Button-3>"
+class FunctionKey(Enum):
+    CONTROL = CTRL = "Control"
+    ALT = "Alt"
+class EventType(Enum):
+    #Mouse
+    MOUSE_MOTION = "<Motion>"
+    WHEEL_MOTION = "<MouseWheel>"
+
+    LEFT_CLICK_RELEASE = "<ButtonRelease-1>"
+    RIGHT_CLICK_RELEASE = "<ButtonRelease-2>"
+    MIDDLE_CLICK_RELEASE = "<ButtonRelease-2>"
+
+    LEFT_CLICK_PRESS = "<ButtonPress-1>"
+    RIGHT_CLICK_PRESS = "<ButtonPress-2>"
+    MIDDLE_CLICK_PRESS = "<ButtonPress-2>"
+
+    LEFT_CLICK = "<Button-1>"
+    RIGHT_CLICK = "<Button-3>"
+    MIDDLE_CLICK = "<Button-2>"
+
+    MOTION_WITH_LEFT_CLICK = "<B1-Motion>"
+    MOTION_WITH_RIGHT_CLICK = "<B2-Motion>"
+    MOTION_WITH_MIDDLE_CLICK = "<B3-Motion>"
+
+    DOUBBLE_LEFT = "<Double-Button-1>"
+    DOUBBLE_RIGHT = "<Double-Button-2>"
+    DOUBBLE_MIDDLE = "<Double-Button-3>"
+
+    #key Events
+    KEY_UP = "<KeyRelease>"
+    KEY_DOWN = "<KeyDown>"
+    ESCAPE = ESC = "<Escape>"
+    BACKSPACE = "<Delete>"#?
+    STRG_LEFT = "<Control_L>"
+    STRG_RIGHT = "<Control_R>"
+    SHIFT = "<Shift>"
+    SHIFT_UP = "<Shift-Up>"
+    SHIFT_DOWN = "<Shift-Down>"
+    RETURN = "<Return>"
+    RETURN_UP = "<Return-Up>"
+    RETURN_DOWN = "<Return-Down>"
+    ARROW_DOWN = "<Down>"
+    ARROW_RIGHT = "<Right>"
+    ARROW_LEFT = "<Left>"
+    ARROW_UP = "<Up>"
+
+    #hotkeys
+    CONTROL_S = "<Control-s>"
+
+    #widget Events
+    SIZE_CONFIUGURE = "<Configure>"
+    DESTROY = "<Destroy>"
+    ALL = "<Key>"
+    ENTER = "<Enter>"
+    LEAVE = "<Leave>"
+    LISTBOX_SELECT = "<<ListboxSelect>>"
+    COMBOBOX_SELECT = "<<ComboboxSelected>>"
+    @staticmethod
+    def mouse(m):
+        return m
+    @staticmethod
+    def key(k):
+        return k
+    @staticmethod
+    def keyDown(k):
+        return "<KeyPress-"+(k.value if hasattr(k, "value") else k)+">"
+    @staticmethod
+    def keyUp(k):
+        return "<KeyRelease-"+(k.value if hasattr(k, "value") else k)+">"
+    @staticmethod
+    def customEvent(k):
+        return k
+    @staticmethod
+    def hotKey(k1:FunctionKey, k2, k3=None):
+        if k3 is not None and not isinstance(k2, FunctionKey): raise ValueError("if k3 is not None then k2 must be instance of 'FunctionKey'!")
+        return "<"+(k1.value if hasattr(k1, "value") else k1)+"-"+(k2.value if hasattr(k2, "value") else k2)+("-"+(k3.value if hasattr(k3, "value") else k3) if k3 is not None else "")+">"
+
+class PILImage:
+    def __init__(self, image):
+        import PIL.Image as Image
+        self.Image = Image
+        if isinstance(image, str):
+            self.image = self.Image.open(image)
+        elif isinstance(image, Image.Image):
+            self.image = image
+        else:
+            raise TKExceptions.InvalidUsageException("Use 'Image.loadImage(<path>)' instad! Not:"+str(type(image)))
+    @staticmethod
+    def loadImage(path):
+        if os.path.exists(path):
+            return PILImage(path)
+        else:
+            raise TKExceptions.PathNotExisits("This path does not Exists: "+str(path))
+    @staticmethod
+    def loadImageFromPIL(image):
+        return PILImage(image)
+    def resize(self, fac):
+        self.image = self.image.resize((int(round(self.image.width * fac, 0)), int(round(self.image.height * fac, 0))), 1)
+    def getWidth(self):
+        return self.image.width
+    def getHeight(self):
+        return self.image.height
+    def _get(self, o=None):
+        import PIL.ImageTk as imgTk
+        return imgTk.PhotoImage(self.image)
+class TkImage:
+    def __init__(self, image:_tk_.PhotoImage):
+        if isinstance(image, _tk_.PhotoImage):
+            self.image = image
+        else:
+            raise TKExceptions.InvalidUsageException("Use 'Image.loadImage(<path>)' instad! Not:" + str(type(image)))
+    @staticmethod
+    def loadImage(path):
+        if os.path.exists(path):
+            return TkImage(_tk_.PhotoImage(file=path))
+        else:
+            raise TKExceptions.PathNotExisits("This path does not Exists: " + str(path))
+    def resize(self, f:int):
+        self.image = self.image.subsample(f)
+    def getWidth(self):
+        return int(self.image["width"])
+    def getHeight(self):
+        return int(self.image["height"])
+    def _get(self, o=None):
+        return self.image
+
+class Event:
+    def __init__(self, dic=None):
+        if dic is None:
+            self.data = {"afterTriggered":None, "setCanceled": False, "widget": None, "args":[],"tkArgs":None, "func":None, "value":None, "eventType":None, "defaultArgs":False, "disableArgs":True, "decryptValueFunc":None, "forceReturn":None}
+        else:
+            self.data = dic.data
+    def __repr__(self):
+        return str(self.data)
+    def __getitem__(self, item):
+        return self.data[item]
+    def __setitem__(self, key, value):
+        self.data[key] = value
+    def getTkArgs(self):
+        return self["tkArgs"]
+    def setCanceled(self, b:bool=True):
+        self["setCanceled"] = b
+    def getWidget(self):
+        return self["widget"]
+    def getValue(self):
+        return self["value"]
+    def getArgs(self):
+        return self["args"]
+    def getEventType(self):
+        return self["eventType"]
+    def info(self):
+        print("This Event[type: "+self["eventType"]+"] was triggered by "+str(type(self["widget"]))+"! | Args:"+str(self["args"]))
+class ScrollBarEvent(Event):
+    pass
+
+class _EventHandler:
+    _Events = {} #save in Individual instance!
+    def __init__(self, event):
+        self.event = Event(event)
+    def __repr__(self):
+        return str(self.__class__.__name__)+"("+str(self.event)+")"
+    def __getitem__(self, item):
+        return self.event[item]
+    def __setitem__(self, key, value):
+        self.event[key] = value
+    def __call__(self, *args):
+        args = args[0] if len(args) == 1 else list(args)
+        if self.event["func"] is not None:
+
+            assert isinstance(self.event["func"], Callable), self.event["eventType"]+" binded Func is not callable "+str(type(self["func"]))+" instead!"
+            self.event["tkArgs"] = args
+            if self.event["decryptValueFunc"] is not None:
+                self.event["value"] = self.event["decryptValueFunc"](args) #TODO self.event in 'decryptValueFunc'
+                if self.event["value"] == "CANCEL":
+                    return
+            if not self.event["disableArgs"]:
+                if not self.event["defaultArgs"]:
+                    args = self.event
+                out = self.event["func"](args)
+            else:
+                if self.event["forceReturn"] is None:
+                    out = self.event["func"]()
+                else:
+                    out = self.event["func"]()
+            if self.event["afterTriggered"] is not None: self.event["afterTriggered"](self.event)
+            if self.event["forceReturn"] is None:
+                if self.event["forceReturn"]:
+                    return self.event["forceReturn"]
+                else: return out
+            else:
+                return self.event["forceReturn"]
+    @staticmethod
+    def unregisterAllEventsFormID(id_):
+        for _event in _EventHandler._Events[id_]:
+            if not any([_event["eventType"]==i for i in ("cmd", "vcmd", "trac", "custom")]):
+                if hasattr(_event["widget"], "unbind"): _event["widget"].unbind(_event["eventType"])
+        if list(_EventHandler._Events.keys()).__contains__(id_): _EventHandler._Events[id_] = []
+    @staticmethod
+    def unregisterEventFormID(id_, event):
+        event = event.value if hasattr(event, "value") else event
+        if list(_EventHandler._Events.keys()).__contains__(id_):
+            for _event in _EventHandler._Events[id_]:
+                if not any([_event["eventType"]==i for i in ("cmd", "vcmd", "trac", "custom")]) and (event.value if hasattr(event, "value") else event) == (_event["eventType"].value if hasattr(_event["eventType"], "value") else _event["eventType"]):
+                    _event["widget"]._get().unbind(_event["eventType"])
+                    _EventHandler._Events[id_].remove(_event)
+                    #@TODO TEST
+    @staticmethod
+    def triggerEventByID(id_):
+        for i in _EventHandler._Events[id_]: i()
+    @staticmethod
+    def getEventByID(id_)->[]:
+        return _EventHandler._Events[id_]
+    @staticmethod
+    def registerNewEvent(obj, func, eventType:Union[EventType, Key, Mouse], args: list, decryptValueFunc=None, defaultArgs=False, disableArgs=False, bindFunc="bind"):
+        event = Event()
+        event["defaultArgs"] = defaultArgs
+        event["disableArgs"] = disableArgs
+        event["widget"] = obj
+        event["args"] = args
+        event["func"] = func
+        event["decryptValueFunc"] = decryptValueFunc
+        if hasattr(eventType, "value"):
+            eventType = eventType.value
+        event["eventType"] = eventType
+        handler = _EventHandler(event)
+        _EventHandler._Events[obj["id"]].append(handler)
+        getattr(obj._get(), bindFunc)(eventType, handler)
+    @staticmethod
+    def registerNewCommand(obj, func, args:Union[list, None], decryptValueFunc=None, defaultArgs=False, disableArgs=False, onlyGetRunnable=False, cmd="command"):
+        event = Event()
+        event["defaultArgs"] = defaultArgs
+        event["disableArgs"] = disableArgs
+        event["widget"] = obj
+        event["args"] = args
+        event["func"] = func
+        event["decryptValueFunc"] = decryptValueFunc
+        event["eventType"] = "cmd"
+        handler = _EventHandler(event)
+        _EventHandler._Events[obj["id"]].append(handler)
+        if not onlyGetRunnable:
+            obj._get()[cmd] = handler
+        else:
+            return handler
+        return event
+    @staticmethod
+    def registerNewValidateCommand(obj, func, args: list, type_="all", decryptValueFunc=None, defaultArgs=False, disableArgs=False):
+        event = Event()
+        event["defaultArgs"] = defaultArgs
+        event["disableArgs"] = disableArgs
+        event["widget"] = obj
+        event["args"] = args
+        event["func"] = func
+        event["decryptValueFunc"] = decryptValueFunc
+        event["forceReturn"] = True
+        event["eventType"] = "vcmd"
+        handler = _EventHandler(event)
+        _EventHandler._Events[obj["id"]].append(handler)
+        obj["widget"]["validate"] = type_
+        obj["widget"]["validatecommand"] = (obj["master"]._get().register(handler), '%P')
+    @staticmethod
+    def registerNewTracer(obj, var, func, args: list, decryptValueFunc=None, defaultArgs=False, disableArgs=False):
+        event = Event()
+        event["defaultArgs"] = defaultArgs
+        event["disableArgs"] = disableArgs
+        event["widget"] = obj
+        event["args"] = args
+        event["func"] = func
+        event["decryptValueFunc"] = decryptValueFunc
+        event["eventType"] = "trac"
+        handler = _EventHandler(event)
+        _EventHandler._Events[obj["id"]].append(handler)
+        var.trace("w", handler)
+    @staticmethod
+    def registerNewCustomEvent(obj, func, args, decryptValueFunc=None, defaultArgs=False, disableArgs=False, after=None):
+        event = Event()
+        event["defaultArgs"] = defaultArgs
+        event["disableArgs"] = disableArgs
+        event["widget"] = obj
+        event["args"] = args
+        event["func"] = func
+        event["decryptValueFunc"] = decryptValueFunc
+        event["afterTriggered"] = after
+        event["eventType"] = "custom"
+        handler = _EventHandler(event)
+        _EventHandler._Events[obj["id"]].append(handler)
+        return handler
+    @staticmethod
+    def registerNewTagBind(obj, id_, func, eventType: Union[EventType, Key, Mouse], args: list, decryptValueFunc=None, defaultArgs=False, disableArgs=False, bindFunc="bind"):
+        #print("bind:", eventType, type(obj))
+        event = Event()
+        event["defaultArgs"] = defaultArgs
+        event["disableArgs"] = disableArgs
+        event["widget"] = obj
+        event["args"] = args
+        event["func"] = func
+        event["decryptValueFunc"] = decryptValueFunc
+        if hasattr(eventType, "value"):
+            eventType = eventType.value
+        event["eventType"] = eventType
+        handler = _EventHandler(event)
+        _EventHandler._Events[obj["id"]].append(handler)
+        obj._get().tag_bind(id_, eventType, handler)
+class TaskScheduler:
+    def __init__(self, master, delay, func, repete=False, dynamic=False):
+        if hasattr(master, "_get"):
+            self._id = None
+            self._master = master
+            self._delay = delay
+            self._func = func
+            self._repete = repete
+            self._dynamic = dynamic
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("WidgetType must be any 'tkWidget' or 'Tk' not:"+str(type(master)))
+    def __call__(self):
+        f = t.time()
+        self._func()
+        if self._repete: self._id = self._master._get().after(self._delay*1000 if not self._dynamic else self._delay-(t.time()-f) if self._delay-(t.time()-f) > 0 else 0, self)
+    def cancel(self):
+        if self._id is not None: self._master.after_cancel(self._id)
+class IntVar:
+    def __init__(self, _master):
+        self.index = -1
+        self.command = None
+        self._intvar = _tk_.IntVar(_master._get())
+    def _add(self):
+        self.index +=1
+        return self.index
+    def _get(self):
+        return self._intvar
+    def get(self):
+        return self._intvar.get()
+    def set(self, v:int):
+        self._intvar.set(v)
+
+class Tk:
+    """
+    The toplevel window class
+
+    """
+    def __init__(self, _master=None):
+        self.quit = self.quitMainLoop
+        if _master is None:
+            self.data = {"master": _tk_.Tk(), "isRunning":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}}
+            _EventHandler._Events[self.data["id"]] = []
+        elif isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab):
+            self.data = _master.data
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance not: " + str(_master.__class__.__name__))
+    def __str__(self):
+        return str(self.__class__.__name__)+"("+str(self.data)+")"
+    def __getitem__(self, item):
+        return self.data[item]
+    def __setitem__(self, key, value):
+        self.data[key] = value
+    def runTask(self, func):
+        task = TaskScheduler(self, 0, func)
+        task._id = self["master"].after(0, task)
+        return task
+    def runTaskAfter(self, time, func):
+        task = TaskScheduler(self, time, func)
+        task._id = self["master"].after(time * 1000, task)
+        return task
+    def runIdleLoop(self, func):
+        task = TaskScheduler(self, 0, func, repete=True)
+        task._id = self["master"].after(0, task)
+        return task
+    def runDelayLoop(self, delay, func):
+        task = TaskScheduler(self, delay, func, repete=True)
+        task._id = self["master"].after(0, task)
+        return task
+    def runDynamicDelayLoop(self, delay, func):
+        task = TaskScheduler(self, delay, func, repete=True, dynamic=True)
+        task._id = self["master"].after(0, task)
+        return task
+    def getWindowActive(self):
+        return self["isRunning"]
+    def throwErrorSound(self):
+        self["master"].bell()
+    def onWindowResize(self, func, args:list=None, defaultArgs=False, disableArgs=False, filterEvent=True):
+        _EventHandler.registerNewEvent(self, func, EventType.key("<Configure>"), args, decryptValueFunc=(self._decryptWindowResize if filterEvent else self._decryptNonFilteredWindowResize), defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def copyToClip(self, s):
+        self["master"].clipboard_append(str(s))
+        return self
+    def clearClip(self):
+        self["master"].clipboard_clear()
+        return self
+    def getClip(self):
+        return self["master"].clipboard_get()
+    def forceFocus(self):
+        self["master"].focus_force()
+        return self
+    def hide(self):
+        self["master"].withdraw()
+    def show(self):
+        self["master"].deiconify()
+    #def bindToWidgetType(self, func, eventType:Union[EventType, Key, Mouse], event, args:list=None, defaultArgs=False, disableArgs=False):
+        #_EventHandler.registerNewEvent(self, func, event.__name__, args, defaultArgs=defaultArgs, disableArgs=disableArgs, bindFunc="bind_class")
+    def bind(self, func, event:Union[EventType, Key, Mouse], args:list=None, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def bindAll(self, func, event: Union[EventType, Key, Mouse], args: list=None, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs, bindFunc="bind_all")
+    def unbindEvent(self, event:Union[EventType, Key, Mouse]):
+        _EventHandler.unregisterEventFormID(self["id"], event)
+    def unbindAllEvents(self):
+        _EventHandler.unregisterAllEventsFormID(self["id"])
+    def getWidgetFromTk(self, w):
+        for widg in self._getAllChildWidgets(self):
+            pass
+    def getWidgetFromLocation(self, loc:Location2D):
+        #for widget in self._getAllChildWidgets(self):
+        #    if widget._get()
+        print(*loc.get())
+        widget = self["master"].winfo_containing(*loc.get())
+        return widget
+    def setCursor(self, c:Cursor):
+        self["master"]["cursor"] = c.value if hasattr(c, "value") else c
+    def hideCursor(self, b=True):
+        if b: self["master"]["cursor"] = "none"
+    def clearAllWidgets(self):
+        for i in self["master"].winfo_children():
+            i.destroy()
+    def setPosOnScreen(self, x, y=None):
+        if isinstance(x, Location2D):
+            x, y = x.get()
+        elif y is None:
+            raise TypeError("y cannot be None!")
+        self["master"].geometry("+"+str(x)+"+"+str(y))
+    def destroy(self):
+        try:
+            self["master"].destroy()
+            return True
+        except:
+            return False
+    def update(self):
+        self["master"].update()
+    def updateIdleTasks(self):
+        self["master"].update_idletasks()
+    def activeWidgets(self): #@TODO: FIX!
+        for i in self["master"].winfo_children():
+            yield i
+    def setCloseable(self, b:bool):
+        self["master"].protocol("WM_DELETE_WINDOW", b)
+    def setTitle(self, title):
+        self["master"].title(title)
+    def setInvisibleColor(self, col):
+        self["master"].wm_attributes("-transparentcolor", col)
+    def disable(self, b=True):
+        self["master"].wm_attributes("-disabled", b)
+    def overrideredirect(self, b=True):
+        self["master"].overrideredirect(b)
+    def setTopmost(self, b=True):
+        self["master"].wm_attributes("-topmost", b)
+    def setResizeable(self, b:bool):
+        self["master"].resizable(b, b)
+    def setPositionOnScreen(self, x, y):
+        if str(x).find("-") == -1: x = "+" + str(x)
+        if str(y).find("-") == -1: y = "+" + str(y)
+        self["master"].geometry(str(x) + str(y))
+    def onCloseEvent(self, func, args:list=None, defaultArgs=False, disableArgs=False):
+        def after(e):
+            if not e["setCanceled"]:
+                self.destroy()
+        runnable = _EventHandler.registerNewCustomEvent(self, func, args, defaultArgs=defaultArgs, disableArgs=disableArgs, after=after)
+        self["master"].protocol("WM_DELETE_WINDOW", runnable)
+        return runnable
+    def setBg(self, col):
+        self["master"]["bg"] = col.value if hasattr(col, "value") else col
+    def getHeight(self):
+        return self["master"].winfo_height()
+    def getWidth(self):
+        return self["master"].winfo_width()
+    def getWindowSize(self):
+        return self["master"].winfo_width(), self["master"].winfo_height()
+    def setWindowSize(self, x, y):
+        self["master"].geometry(str(x) + "x" + str(y))
+    def setMaxSize(self, x, y):
+        self["master"].maxsize(x, y)
+    def setMinSize(self, x, y):
+        self["master"].minsize(x, y)
+    def quitMainLoop(self):
+        self["master"].quit()
+    def mainloop(self):
+        #self._finishLastTasks()
+        self["isRunning"] = True
+        self["master"].mainloop()
+        self["isRunning"] = False
+    def _updateDynamicSize(self, widget):
+        if widget["alive"] and widget["id"] in list(self["dynamicWidgets"].keys()):
+            widget.placeForget()
+            self._get().update_idletasks()
+            data = widget["placeRelData"]
+            x = _map(data["xOffset"] + data["xOffsetLeft"], 0, 100, 0, widget["master"].getWidth())
+            y = _map(data["yOffset"] + data["yOffsetUp"], 0, 100, 0, widget["master"].getHeight())
+            width = (widget["master"].getWidth() - _map(data["xOffset"] + data["xOffsetRight"], 0, 100, 0, widget["master"].getWidth()) - x) - (widget.data["yScrollbar"]["thickness"] if "yScrollbar" in list(widget.data.keys()) and widget.data["yScrollbar"]["autoPlace"] else 0)
+            height = (widget["master"].getHeight() - _map(data["yOffset"] + data["yOffsetDown"], 0, 100, 0, widget["master"].getHeight()) - y) - (widget.data["xScrollbar"]["thickness"] if "xScrollbar" in list(widget.data.keys()) and widget.data["xScrollbar"]["autoPlace"] else 0)
+            widget["widget"].place(x=x,
+                                 y=y,
+                                 width=width,
+                                 height=height,
+                                 anchor=Anchor.UP_LEFT.value)
+
+            if "xScrollbar" in list(widget.data.keys()) and widget.data["xScrollbar"]["autoPlace"]:
+                widget.data["xScrollbar"].place(x, y + height, width=width)
+
+            if "yScrollbar" in list(widget.data.keys()) and widget.data["yScrollbar"]["autoPlace"]:
+                widget.data["yScrollbar"].place(x + width, y, height=height)
+
+            widget._get().update_idletasks()
+            widget["alive"] = True
+    def _onResize(self, e):
+        for widget in list(self["dynamicWidgets"].values()):
+            if widget["alive"]:
+                self._updateDynamicSize(widget)
+    def _resisterOnResize(self, widget):
+        self["dynamicWidgets"][widget["id"]] = widget
+    def _unregisterOnResize(self, widget):
+        if list(self["dynamicWidgets"].keys()).__contains__(widget["id"]):
+            del self["dynamicWidgets"][widget["id"]]
+    def _decryptWindowResize(self, args):
+        _size = self.getWindowSize()
+        if self["oldWinSize"] == _size:
+            return "CANCEL"
+        else:
+            self["oldWinSize"] = _size
+            return _size
+    def _decryptNonFilteredWindowResize(self, args):
+        return self.getWindowSize()
+    def _privateDecryptWindowResize(self, args):
+        _size = self.getWindowSize()
+        if self["privateOldWinSize"] == _size:
+            return "CANCEL"
+        else:
+            self["privateOldWinSize"] = _size
+            return _size
+    def _finishLastTasks(self):
+        _EventHandler.registerNewEvent(self, self._onResize, EventType.key("<Configure>"), [], decryptValueFunc=self._privateDecryptWindowResize)
+        self._onResize("")
+    @staticmethod
+    def _getAllChildWidgets(widget):
+        ch = [widget]
+        def point(_widget):
+            for cw in _widget["childWidgets"].values():
+                ch.append(cw)
+                point(cw)
+        point(widget)
+        return ch
+    @staticmethod
+    def _getAllParentWidgets(widget):
+        ch = []
+
+        while True:
+            if isinstance(widget, Tk):
+                break
+            widget = widget["master"]
+            ch.append(widget)
+
+        return ch
+    @staticmethod #TODO FINISH UFF
+    def _showParentChildTree(widget):
+        print("==Hierarchy==")
+        def point(_widget):
+            for cw in _widget["childWidgets"].values():
+                print("".join([("│ " if not isinstance(cw, _tk_.Tk) and not isinstance(cw["master"], _tk_.Tk) and not isinstance(cw["master"]["master"], _tk_.Tk) and any([index == (len(Tk._getAllParentWidgets(cw))-2)]) and list(cw["master"]["master"]["childWidgets"].values()).index(cw["master"]) != len(list(cw["master"]["master"]["childWidgets"].values()))-1 else "  ") for index in range(len(Tk._getAllParentWidgets(cw))-1)]) + ("└" if len(_widget["childWidgets"].values())-1 == list(_widget["childWidgets"].values()).index(cw) else "├")+"─"+cw.__class__.__name__)
+                point(cw)
+        print(widget.__class__.__name__)
+        point(widget)
+    def _get(self):
+        return self["master"]
+class TkToplevel(Tk):
+    def __init__(self, _master):
+        if isinstance(_master, Tk):
+            self.data = {"master": _tk_.Toplevel(_master._get()), "childWidgets":{}, "hasMenu":False, "widgets":[], "id":"".join([str(r.randint(0,9)) for _ in range(15)])}
+            _EventHandler._Events[self.data["id"]] = []
+        elif isinstance(_master, TkToplevel):
+            self.data = _master.data
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance not: " + str(_master.__class__.__name__))
+        super().__init__(self.data)
+    def mainloop(self):
+        pass
+
+class Widget:
+    def __init__(self, ins, data):
+        self._ins = ins
+        if list(data.keys()).__contains__("id"): self.data = data
+        else:
+            data["tkMaster"] = data["master"] if isinstance(data["master"], Tk) else data["master"]["tkMaster"]
+            id = "".join([str(r.randint(0,9)) for _ in range(15)])
+            _EventHandler._Events[id] = []
+            self.data = {**data, **{"widgetProperties":{},"childWidgets":{}, "id":id, "alive":True, "destroyed":False}}
+            self.data["master"]["childWidgets"][self["id"]] = ins
+            if list(data.keys()).__contains__("init"):
+                for key, value in zip(data["init"].keys(), data["init"].values()):
+                    if key == "func": value()
+                    else: self._setAttribute(name=key, value=value)
+                del data["init"]
+    def __getitem__(self, item):
+        try:return self.data[item]
+        except KeyError as e: raise KeyError("Item '"+str(item)+"' is not in dict of class '"+self["widget"].__class__.__name__+"'")
+    def __setitem__(self, key, value):
+        self.data[key] = value
+    def __str__(self):
+        return str(self.__class__.__name__)+"("+str(self.data)+")"
+    def __eq__(self, other):
+        if not hasattr(other, "data"): return False
+        return self.data == other.data
+    def _setId(self, id_:str): #@TODO: why? maby error with event??
+        self["id"] = str(id_)
+    def unbind(self, event:Union[EventType, Key, Mouse]):
+        _EventHandler.unregisterEventFormID(self["id"], event)
+    def setStyle(self, style:Style):
+        self._setAttribute("relief", style.value if hasattr(style, "value") else style)
+        return self
+    def setBorderWidth(self, bd:int):
+        self._setAttribute("bd", bd)
+        return self
+    def getHeight(self):
+        self.updateIdleTasks()
+        return self["widget"].winfo_height()
+    def getWidth(self):
+        self.updateIdleTasks()
+        return self["widget"].winfo_width()
+    def lift(self, widg=None):
+        if widg is not None:
+            self["widget"].lift(widg._get())
+        else:
+            self["widget"].lift()
+    def bind(self, func, event:Union[EventType, Key, Mouse], args:list=None, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self._ins, func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def canTakeFocusByTab(self, b:bool=False):
+        self._setAttribute("takefocus", int(b))
+        return self
+    def setCursor(self, c:Cursor):
+        self["widget"]["cursor"] = c.value if hasattr(c, "value") else c
+        return self
+    def isFocus(self):
+        return self["widget"].focus_get()
+    def setFocus(self):
+        self["widget"].focus_set()
+        return self
+    def getPosition(self):#?
+        return self["widget"].winfo_x(), self["widget"].winfo_y()
+    def setDisabled(self):
+        self._setAttribute("state", _tk_.DISABLED)
+        return self
+    def setEnabled(self):
+        self._setAttribute("state", _tk_.NORMAL)
+        return self
+    def update(self):
+        self["widget"].update()
+        return self
+    def updateIdleTasks(self):
+        self["widget"].update_idletasks()
+        return self
+    def setFont(self, size, art=FontType.ARIAL, underline=False, bold=False, kusiv=False):
+        self._setAttribute("font", tuple([i for i in [art.value if hasattr(art, "value") else art, size, "underline" if underline else "",  "bold" if bold else "", "italic" if kusiv else ""] if i != ""]))
+        return self
+    def setText(self, text):
+        self._setAttribute("text", str(text))
+        return self
+    def getText(self):
+        return self["widget"]["text"]
+    def setBg(self, col:Color):
+        self._setAttribute("bg", col.value if hasattr(col, "value") else col)
+        return self
+    def setFg(self, col:Color):
+        self._setAttribute("fg", col.value if hasattr(col, "value") else col)
+        return self
+    def setActiveBg(self, col:Color):
+        self._setAttribute("activebackground", col.value if hasattr(col, "value") else col)
+        return self
+    def setActiveFg(self, col:Color):
+        self._setAttribute("activeforeground", col.value if hasattr(col, "value") else col)
+        return self
+    def placeForget(self):
+        try:
+            self["widget"].place_forget()
+            self["alive"] = False
+        except: pass
+    def grid(self, row=0, column=0):
+        assert not self["destroyed"], "The widget has been destroyed and can no longer be placed."
+        self["widget"].grid(row=row, column=column)
+        return self
+    def placeRelative(self, xOffset=0, yOffset=0, xOffsetLeft = 0, xOffsetRight=0, yOffsetUp=0, yOffsetDown=0, updateOnResize=True):
+        assert 100 >= xOffset + xOffsetLeft >= 0 and 100 >= xOffset + xOffsetRight >= 0, "xOffset must be a int Value between 0 and 100!"
+        assert 100 >= yOffset + yOffsetUp >= 0 and 100 >= yOffset + yOffsetDown >= 0, "yOffset must be a int Value between 0 and 100!"
+        self.data["placeRelData"] = {"xOffset": xOffset,
+                                     "xOffsetLeft": xOffsetLeft,
+                                     "xOffsetRight": xOffsetRight,
+                                     "yOffset": yOffset,
+                                     "yOffsetUp": yOffsetUp,
+                                     "yOffsetDown": yOffsetDown}
+        self["tkMaster"]._updateDynamicSize(self)
+        if updateOnResize: self["tkMaster"]._resisterOnResize(self)
+        return self
+    def place(self, x=0, y=0, width=None, height=None, anchor:Anchor=Anchor.UP_LEFT):
+        assert not self["destroyed"], "The widget has been destroyed and can no longer be placed."
+        if hasattr(anchor, "value"):
+            anchor = anchor.value
+        self.placeForget()
+        if isinstance(x, Location2D):
+            x, y = x.get()
+        x = int(round(x, 0))
+        y = int(round(y, 0))
+        self["widget"].place(x=x, y=y, width=width, height=height, anchor=anchor)
+        self["alive"] = True
+        return self
+    def destroy(self):
+        assert not self["destroyed"], "Widget is already destroyed!"
+        _EventHandler.unregisterAllEventsFormID(self["id"])
+        self["tkMaster"]._unregisterOnResize(self)
+        del self["master"]["childWidgets"][self["id"]]
+        self["widget"].destroy()
+        self["alive"] = False
+    def type(self):
+        return type(self._ins)
+    def _decryptEvent(self, args):
+        pass
+    def _id(self):
+        return self["id"]
+    def _register(self, e):
+        self["master"].register(e)
+    def _setAttribute(self, name, value):
+        self["widgetProperties"][name] = value
+        try:
+            self["widget"][name] = value
+        except Exception as e:
+            raise AttributeError("Could not set Attribute of Widget "+str(type(self._ins))+"!\n(KEY: '"+str(name)+"' | VALUE["+str(type(value))+"]: '"+str(value)+"') \n"+str(e))
+    def _getAllChildWidgets(self):
+        return list(self["childWidgets"].values())
+    def _get(self):
+        return self["widget"]
+class Calendar(Widget):
+    def __init__(self, _master, autoPlace=True):
+        import tkcalendar as cal
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame):
+            self.data = {"master": _master, "widget": cal.Calendar(_master._get()), "init": {}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def setDate(self, d, m, y):
+        self._setAttribute("day", d)
+        self._setAttribute("month", m)
+        self._setAttribute("year", y)
+        return self
+    def _decryptEvent(self, args):
+        return self["widget"].get_date()
+    def setMaxDate(self, d, m, y):
+        self._setAttribute("maxdate", date(y, m, d))
+        return self
+    def setMinDate(self, d, m, y):
+        self._setAttribute("mindate", date(y, m, d))
+        return self
+    def getValue(self):
+        return self["widget"].get_date()
+    def onCalendarSelectEvent(self, func, args: list = None, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func,EventType.customEvent("<<CalendarSelected>>"), args, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+class DropdownCalendar(Widget):
+    def __init__(self, _master, autoPlace=True):
+        import tkcalendar as cal
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame):
+            self.data = {"master": _master, "widget": cal.DateEntry(_master._get()), "init": {}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def setDate(self, d, m, y):
+        self._setAttribute("day", d)
+        self._setAttribute("month", m)
+        self._setAttribute("year", y)
+        return self
+    def _decryptEvent(self, args):
+        return self["widget"].get_date()
+    def setMaxDate(self, d, m, y):
+        self._setAttribute("maxdate", date(y, m, d))
+        return self
+    def setMinDate(self, d, m, y):
+        self._setAttribute("mindate", date(y, m, d))
+        return self
+    def getValue(self):
+        return self["widget"].get_date()
+    def onCalendarSelectEvent(self, func, args: list = None, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func,EventType.customEvent("<<DateEntrySelected>>"), args, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+class ScrollBar(Widget):
+    def __init__(self, _master, autoPlace=True):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame):
+            self.data = {"master": _master, "widget": _tk_.Scrollbar(_master._get()), "autoPlace":autoPlace, "thickness":18, "init": {}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def callEventOnReleaseScrollbar(self):
+        self._setAttribute("jump", 1)
+    def callEventOnScroll(self):
+        self._setAttribute("jump", 0)
+    def onScrollEvent(self, func, args: list = None, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewCommand(self, func, args, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def _decryptEvent(self, args):
+        print(args)
+        return None
+    def setWidth(self, w:int):
+        self["widget"]["width"] = w
+        self["thickness"] = w-10
+        return self
+class Frame(Widget):
+    def __init__(self, _master):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master": _master,  "widget": _tk_.Frame(_master._get())}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def destroy(self):
+        assert self["alive"], "Widget is already destroyed!"
+        for id, widg in zip(self["childWidgets"].keys(), self["childWidgets"].values()):
+            _EventHandler.unregisterAllEventsFormID(widg["id"])
+            self["tkMaster"]._unregisterOnResize(widg)
+        del self["master"]["childWidgets"][self["id"]]
+        _EventHandler.unregisterAllEventsFormID(self["id"])
+        self["tkMaster"]._unregisterOnResize(self)
+        self["widget"].destroy()
+        self["alive"] = False
+class LabelFrame(Widget):
+    def __init__(self, _master):
+        if isinstance(_master, dict):
+            self.data = _master
+
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame):
+            self.data = {"master": _master,  "widget": _tk_.LabelFrame(_master._get())}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+class Label(Widget):
+    def __init__(self, _master, text=""):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master":_master,  "text":text, "widget":_tk_.Label(_master._get()), "init":{"text":text}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+" or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def setImage(self, img:Union[TkImage, PILImage]):
+        self["widget"]._image = img._get()
+        self["widget"]["image"] = self["widget"]._image
+        return self
+class Checkbutton(Widget):
+    CHECKED = True
+    UNCHECKED = False
+    def __init__(self, _master, defaultState:bool=UNCHECKED, text:str=""):
+        self.getValue = self.getState
+        self.setValue = self.setState
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, _SubMenu):
+            self.data = {"master": _master._master,  "widget": _tk_.Checkbutton(_master._master._get()), "instanceOfMenu":True}
+            _master._widgets.append(["checkbutton", self])
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            intVar = _tk_.IntVar(_master._get())
+            intVar.set(defaultState)
+            self.data = {"master":_master, "text":text, "widget":_tk_.Checkbutton(_master._get()), "intVar":intVar, "init":{"text":text, "variable":intVar}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def onSelectEvent(self, func, args: list = None, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewCommand(self, func, args, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        return self
+    def _decryptEvent(self, e):
+        return self.getState()
+    def setSelected(self):
+        self.setState(True)
+        return self
+    def setState(self, b):
+        self["intVar"].set(b)
+        return self
+    def getState(self):
+        return self["intVar"].get()
+class Radiobutton:
+    def __init__(self, _master):
+        self.getValue = self.getState
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            intVar = IntVar(_master)
+            self.data = {"master": _master,  "widgets":[], "intVar":intVar, "eventArgs":[]}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+    def getState(self):
+        return self.data["intVar"].get()
+    def createNewRadioButton(self):
+        rb =_RadioButton(self.data["master"], self.data["intVar"])
+        self.data["widgets"].append(rb)
+        for i in self.data["eventArgs"]: _EventHandler.registerNewCommand(rb, i["func"], i["args"], decryptValueFunc=rb._decryptEvent, defaultArgs=i["defaultArgs"], disableArgs=i["disableArgs"])
+        return rb
+    def onSelectEvent(self, func, args:list=None, defaultArgs=False, disableArgs=False):
+        self.data["eventArgs"].append({"func":func, "args":args , "defaultArgs":defaultArgs, "disableArgs":disableArgs})
+        for btn in self.data["widgets"]:
+            _EventHandler.registerNewCommand(btn, func, args, decryptValueFunc=btn._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+class _RadioButton(Widget):
+    def __init__(self, _master, intVar):
+        self.data = {"master": _master, "widget": _tk_.Radiobutton(_master._get()), "intvar": intVar, "init": {"variable": intVar._get(), "value": intVar._add()}}
+        super().__init__(self, self.data)
+    def setSelected(self):
+        self["intvar"].set(self["widget"]["value"])
+        return self
+    def getValue(self):
+        return self["intvar"].get()
+    def setSelectColor(self, c:Color):
+        self._setAttribute("selectcolor", c.value if hasattr(c, "value") else c)
+        return self
+    def flash(self):
+        self["widget"].flash()
+        #changes serveral times between selected and bg color
+        return self
+    def _decryptEvent(self, args):
+        return self.getText()
+class Button(Widget):
+    def __init__(self, _master, text="", canBePressedByReturn=True, fireOnlyOnce=True, fireInterval:float=0.1, firstDelay:float=0.5):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, ContextMenu) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master":_master, "widget":_tk_.Button(_master._get()), "canBePressedByReturn":canBePressedByReturn, "instanceOfMenu":False, "init":{"text":text}}
+            if not fireOnlyOnce:
+                self.data["init"]["repeatdelay"] = int(firstDelay * 1000)
+                self.data["init"]["repeatinterval"] = int(fireInterval * 1000)
+        elif isinstance(_master, _SubMenu):
+            self.data = {"master": _master._master,  "widget": _tk_.Button(_master._master._get()), "instanceOfMenu":True}
+            _master._widgets.append(["command", self])
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def triggerButtonPress(self, normalRelief=True):
+        if normalRelief: self.setStyle(Style.SUNKEN)
+        self.update()
+        _EventHandler.triggerEventByID(self["id"])
+        if normalRelief: self.setStyle(Style.RAISED)
+        self.update()
+    def setStyleOnHover(self, style:Style):
+        self._setAttribute("overrelief", style.value if hasattr(style, "value") else style)
+        return self
+    def flash(self):
+        self["widget"].flash()
+        #changes serveral times between selected and bg color
+        return self
+    def setCommand(self, cmd, args:list=None, disableArgs=False, defaultArgs=False):
+        runnable = _EventHandler.registerNewCommand(self, cmd, args, disableArgs=disableArgs, defaultArgs=defaultArgs, onlyGetRunnable=self["instanceOfMenu"])
+        if self["instanceOfMenu"]:
+            self["widgetProperties"]["command"] = runnable
+        elif self["canBePressedByReturn"]:
+            _EventHandler.registerNewEvent(self, cmd, EventType.key(Key.RETURN) , args, disableArgs=disableArgs, defaultArgs=defaultArgs)
+        return self
+    def addImage(self, img:Union[TkImage, PILImage]):
+        self["widget"]._image = img._get()
+        self["widget"]["image"] = self["widget"]._image
+        return self
+class OnOffButton(Widget):
+    def __init__(self, _master, text="", default=False, colorsActive=True, reliefActive=False):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master":_master,  "text":text, "widget":_tk_.Button(_master._get()), "value":default, "relief":reliefActive, "color":colorsActive, "init":{"text":text}}
+            if default:
+                if colorsActive: self.data["init"]["bg"] = Color.GREEN.value
+                if reliefActive: self.data["init"]["relief"] = Style.SUNKEN.value
+            else:
+                if colorsActive: self.data["init"]["bg"] = Color.RED.value
+                if reliefActive: self.data["init"]["relief"] = Style.SUNKEN.value
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def setCommand(self, cmd, args:list=None, disableArgs=False, defaultArgs=False):
+        _EventHandler.registerNewCommand(self, cmd, args,disableArgs=disableArgs, defaultArgs=defaultArgs, decryptValueFunc=self._decryptEvent)
+        return self
+    def _decryptEvent(self, args):
+        self["value"] = not self["value"]
+        if self["value"]:
+            if self["color"]: self.setBg(Color.RED)
+            if self["relief"]: self.setStyle(Style.RAISED)
+        else:
+            if self["color"]: self.setBg(Color.GREEN)
+            if self["relief"]: self.setStyle(Style.SUNKEN)
+        return self["value"]
+class Entry(Widget):
+    def __init__(self, _master):
+        self.getValue = self.getText
+        self.setValue = self.setText
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master":_master,  "widget":_tk_.Entry(_master._get())}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def attachHorizontalScrollBar(self, sc:ScrollBar):
+        self["xScrollbar"] = sc
+        sc["widget"]["orient"] = _tk_.HORIZONTAL
+        sc["widget"]["command"] = self._scrollHandler
+        self["widget"]["xscrollcommand"] = sc["widget"].set
+    def setCursorBlinkDelay(self, d:float):
+        self._setAttribute("insertofftime",  int(d * 1000))
+        self._setAttribute("insertontime", int(d * 1000))
+        return self
+    def setCursorColor(self, c: Color):
+        self._setAttribute("insertbackground", c.value if hasattr(c, "value") else c)
+        return self
+    def setCursorThickness(self, i: int):
+        self._setAttribute("insertwidth", i)
+        return self
+    def setSelectForeGroundColor(self, c:Color):
+        self._setAttribute("selectforeground", c.value if hasattr(c, "value") else c)
+    def setSelectBackGroundColor(self, c:Color):
+        self._setAttribute("selectbackground", c.value if hasattr(c, "value") else c)
+    def onUserInputEvent(self, func, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func, EventType.KEY_UP, [], decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        #_EventHandler.registerNewValidateCommand(self, func, [], "all", decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        return self
+    def hideCharactersWith(self, i:str="*"):
+        self._setAttribute("show", str(i))
+        return self
+    def clear(self):
+        self["widget"].delete(0, _tk_.END)
+        return self
+    def setText(self, text):
+        self.clear()
+        self["widget"].insert(0, str(text))
+        return self
+    def addText(self, text):
+        self["widget"].insert(0, str(text))
+        return self
+    def getText(self):
+        return self["widget"].get()
+    def _decryptEvent(self, args):
+        return args
+    def _scrollHandler(self, *l):
+        op, howMany = l[0], l[1]
+        if op == 'scroll':
+            units = l[2]
+            self["widget"].xview_scroll(howMany, units)
+        elif op == 'moveto':
+            self["widget"].xview_moveto(howMany)
+class TextEntry(Widget):
+    def __init__(self, _master, text=""):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            widg = LabelFrame(_master)
+            self.data = {"master":_master,  "widget":widg, "value":"", "label":Label(widg), "entry":Entry(widg)}
+            self.data["widget"]._get().grid(padx=10, pady=10)
+            self.data["label"].setText(text)
+            self.data["label"]._get().grid(row=0, column=0)
+            self.data["entry"]._get().grid(row=0, column=1)
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        return self
+    def getValue(self):
+        return self.getEntry().getValue()
+    def setValue(self, v):
+        self.getEntry().clear()
+        self.getEntry().setValue(str(v))
+    def getEntry(self):
+        return Entry(self["entry"])
+    def getLabel(self):
+        return Label(self["label"])
+    def setDisabled(self):
+        self.getEntry().setDisabled()
+    def setEnabled(self):
+        self.getEntry().setEnabled()
+    def _get(self):
+        return self["widget"]._get()
+class TextDropdownMenu(Widget):
+    def __init__(self, _master, text=""):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            widg = LabelFrame(_master)
+            self.data = {"master":_master,  "widget":widg, "value":"", "dropdownMenu":DropdownMenu(widg), "label":Label(widg)}
+            self.data["widget"]._get().grid(padx=10, pady=10)
+            self.data["label"].setText(text)
+            self.data["label"]._get().grid(row=0, column=0)
+            self.data["dropdownMenu"]._get().grid(row=0, column=1)
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        return self
+    def getValue(self):
+        return self.getDropdownMenu().getValue()
+    def setValue(self, v):
+        self.getDropdownMenu().setValue(str(v))
+    def getLabel(self):
+        return Label(self["label"])
+    def getDropdownMenu(self):
+        return DropdownMenu(self["dropdownMenu"])
+    def setDisabled(self):
+        self.getDropdownMenu().setDisabled()
+    def setEnabled(self):
+        self.getDropdownMenu().setEnabled()
+    def _get(self):
+        return self["widget"]._get()
+class Listbox(Widget):
+    SINGLE = "single"
+    MULTIPLE = "multiple"
+    def __init__(self, _master, mode=SINGLE):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master":_master,  "widget":_tk_.Listbox(_master._get()), "selectionMode":mode, "init":{"selectmode":mode}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def attachVerticalScrollBar(self, sc:ScrollBar):
+        self["yScrollbar"] = sc
+        sc["widget"]["orient"] = _tk_.VERTICAL
+        sc["widget"]["command"] = self["widget"].yview
+        self["widget"]["yscrollcommand"] = sc["widget"].set
+        return self
+    def clearSelection(self):
+        self["widget"].selection_clear(0, "end")
+    def add(self, entry:str, index = "end", color:Color=Color.WHITE):
+        self["widget"].insert(index, str(entry))
+        if len(self.getAllSlots()) != 0:
+            self.setSlotBg((self.length()-1 if index=="end" else index), color)
+        return self
+    def addAll(self, entry:[str], index = "end", color:Color=Color.WHITE):
+        for i in entry:
+            self["widget"].insert(index, str(i))
+            if len(self.getAllSlots()) != 0:
+                self.setSlotBg(self.length()-1, color)
+        return self
+    def length(self):
+        return self["widget"].size()
+    def clear(self):
+        self["widget"].delete(0, _tk_.END)
+        return self
+    def setSlotBgAll(self, color:Color=Color.WHITE):
+        for i in self.getAllSlotIndexes():
+            self.setSlotBg(i, color)
+        return self
+    def setItemSelectedByIndex(self, index, clearFirst=True):
+        if clearFirst: self["widget"].selection_clear(0, "end")
+        self["widget"].select_set(index)
+        return self
+    def setItemSelectedByName(self, name, clearFirst=True):
+        if clearFirst: self["widget"].selection_clear(0, "end")
+        if name in self.getAllSlots():
+            self.setItemSelectedByIndex(self.getAllSlots().index(name))
+        return self
+    def deleteItemByIndex(self, index):
+        self["widget"].delete(index)
+        return self
+    def deleteItemByName(self, name):
+        self.deleteItemByIndex(self.getAllSlots().index(name))
+    def getIndexByName(self, item):
+        return self.getAllSlots().index(item)
+    def getNameByIndex(self, index):
+        return self.getAllSlots()[index]
+    def getSelectedIndex(self):
+        if self["selectionMode"] == Listbox.SINGLE:
+            if len(self["widget"].curselection()) == 0: return -1
+            return int(self["widget"].curselection()[0])
+        else:
+            return [int(i) for i in self["widget"].curselection()]
+    def getSelectedItem(self):
+        index = self.getSelectedIndex()
+        if type(index) == int:
+            return self.getNameByIndex(index)
+        else:
+            return [self.getNameByIndex(i) for i in index]
+    def setSlotBg(self, index, col:Color=Color.WHITE):
+        self["widget"].itemconfig(index, bg=col.value if hasattr(col, "value") else col)
+        return self
+    def getAllSlotIndexes(self):
+        return [i for i in range(self.length())]
+    def getAllSlots(self):
+        return [self["widget"].get(i) for i in range(self.length())]
+    def onSelectEvent(self, func, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func, EventType.LISTBOX_SELECT, [], defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+    def _decryptEvent(self, args):
+        try:
+            w = args.widget
+            if self["selectionMode"] == Listbox.SINGLE:
+                return w.get(int(w.curselection()[0]))
+            else:
+                return [w.get(int(i)) for i in w.curselection()]
+        except:
+            return "CANCEL"
+class Scale(Widget):
+    HORIZONTAL = _tk_.HORIZONTAL
+    VERTICAL = _tk_.VERTICAL
+    def __init__(self, _master, from_=0, to=100, orient=HORIZONTAL):
+        self.setResolution = self.setSteps
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            doubbleVar = _tk_.DoubleVar(_master._get())
+            self.data = {"master":_master,  "widget":_tk_.Scale(_master._get()), "var":doubbleVar, "init":{"variable":doubbleVar, "from_":from_, "to":to, "orient":orient}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def getValue(self):
+        return self["var"].get()
+    def setValue(self, v):
+        self["var"].set(v)
+        return self
+    def getSlideLocation(self, value=None):
+        if value is None: value = self.getValue()
+        return Location2D(self["widget"].coords(value))
+    def setIntervalIndicators(self, i:float=-1):
+        self._setAttribute("tickinterval", i)
+        return self
+    def setSliderBg(self, color:Color):
+        self._setAttribute("troughcolor", color.value if hasattr(color, "value") else color)
+        return self
+    def setText(self, text):
+        self._setAttribute("label", str(text))
+    def setValueVisible(self, b:bool=True):
+        self._setAttribute("showvalue", b)
+        return self
+    def setSliderWidth(self, i:int=30):
+        self._setAttribute("sliderlength", i)
+        return self
+    def setStyle(self, style:Style=Style.RAISED):
+        self._setAttribute("sliderrelief", style.value if hasattr(style, "value") else style)
+    def setSteps(self, s:int=1):
+        self._setAttribute("resolution", s)
+        return self
+    def onScroll(self, func):
+        _EventHandler.registerNewCommand(self, func, args=None, decryptValueFunc=self._decryptValue)
+        return self
+    def _decryptValue(self, a=None):
+        return self.getValue()
+class Progressbar(Widget):
+    def __init__(self, _master, values:int=100):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master":_master,  "widget":ttk.Progressbar(_master._get()), "values":values, "value":0}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def setNormalMode(self):
+        self["widget"].stop()
+        self._setAttribute("mode", "determinate")
+        return self
+    def setAutomaticMode(self, delay=0.01):
+        self._setAttribute("mode", "indeterminate")
+        self["widget"].start(int(delay*1000))
+        return self
+    def iter(self, reset=True):
+        if reset:
+            v = self["values"]
+            self.reset()
+        else:
+            v = self["values"] - self["value"]
+        for i in range(v):
+            self.addValue()
+            yield i
+    def setOrient(self, o:Orient):
+        self._setAttribute("orient", o.value if hasattr(o, "value") else o)
+        return self
+    def setValues(self, val):
+        self["values"] = int(val)
+    def update(self):
+        self._setAttribute("value", int((self["value"] / self["values"]) * 100))
+        self["widget"].update()
+    def addValue(self, v=1):
+        if self["values"] >= self["value"]+v:
+            self["value"] += v
+            self._setAttribute("value", int((self["value"] / self["values"]) * 100))
+    def isFull(self):
+        return self["values"] <= self["value"]
+    def reset(self):
+        self._setAttribute("value", 0)
+        self["value"] = 0
+    def setValue(self, v):
+        if self["values"] >= v:
+            self["value"] = v
+            self._setAttribute("value", int((self["value"] / self["values"]) * 100))
+    def setPercentage(self, p):
+        if str(p).startswith("0."):
+            p *= 100
+        self._setAttribute("value", p)
+        self["value"] = p / 100 * self["values"]
+class Text(Widget):
+    def __init__(self, _master, readOnly=False, forceScroll=False, scrollAble=False):
+        self.getContent = self.getText
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame):
+            self.data = {"master": _master,  "widget": _text.ScrolledText(_master._get()) if scrollAble else _tk_.Text(_master._get()), "forceScroll":forceScroll, "tagCounter":0, "init":{"state":"disabled" if readOnly else "normal"}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def addLine(self, text, color="black"):
+        if not text.endswith("\n"): text = text+"\n"
+        self.addText(text, color)
+        return self
+    def addText(self, text, color="black"):
+        disableAfterWrite=False
+        if text.endswith("\n"):
+            text = text[0:-1]
+        self["tagCounter"]+=1
+        if self["widgetProperties"]["state"] == "disabled":
+            self.setEnabled()
+            disableAfterWrite = True
+        self["widget"].insert("end", str(text)+"\n")
+        self["widget"].tag_add(str(self["tagCounter"]), str(self["tagCounter"])+".0", "end")
+        self["widget"].tag_config(str(self["tagCounter"]), foreground=color)
+        if self["forceScroll"]:
+            self["widget"].see("end")
+        self["tagCounter"]+=text.count("\n")
+        if disableAfterWrite:
+            self.setDisabled()
+        return self
+    def addTextFromFile(self, path, clearFirst=True):
+        if os.path.exists(path):
+            if clearFirst: self.clear()
+            file = open(path, "r")
+            for line in file:
+                self.addText(line)
+            file.close()
+        else:
+            TKExceptions.PathNotExisits("Cannot pull content from this file: "+path)
+    def getText(self):
+        return self["widget"].get(0.0, "end")
+    def scrollDown(self):
+        self["widget"].see("end")
+        return self
+    def clear(self):
+        disableAfterWrite = False
+        if self["widgetProperties"]["state"] == "disabled":
+            self.setEnabled()
+            disableAfterWrite = True
+        self["widget"].delete(0.0, _tk_.END)
+        for i in self["widget"].tag_names():
+            self["widget"].tag_delete(i)
+        self["tagCounter"] = 0
+        if disableAfterWrite:
+            self.setDisabled()
+        return self
+    def getSelectedText(self):
+        return self["widget"].get("sel.first", "sel.last")
+    def onUserInputEvent(self, func, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func,EventType.KEY_UP, [], decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        #_EventHandler.registerNewValidateCommand(self, func, [], "all", decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def setSelectForeGroundColor(self, c:Color):
+        self._setAttribute("selectforeground", c.value if hasattr(c, "value") else c)
+    def setSelectBackGroundColor(self, c:Color):
+        self._setAttribute("selectbackground", c.value if hasattr(c, "value") else c)
+    def setCursorColor(self, c:Color):
+        self._setAttribute("insertbackground", c.value if hasattr(c, "value") else c)
+        return self
+    def setCursorThickness(self, i:int):
+        self._setAttribute("insertwidth", i)
+        return self
+    def setCursorBlinkDelay(self, d:float):
+        self._setAttribute("insertofftime",  int(d * 1000))
+        self._setAttribute("insertontime", int(d * 1000))
+        return self
+    def setUndo(self, b:bool, maxUndo=-1):
+        self._setAttribute("undo", int(b))
+        self._setAttribute("maxundo", maxUndo)
+        return self
+    def setWrapping(self, w:Wrap):
+        self._setAttribute("wrap", w.value if hasattr(w, "value") else w)
+        return self
+    def _decryptEvent(self, args):
+        return self.getText()
+class TreeView(Widget):
+    def __init__(self, _master):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master": _master,  "widget":ttk.Treeview(_master._get()), "headers":[]}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def onSelectEvent(self, func, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func, Mouse.DOUBBLE_LEFT, [], defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+    def _decryptEvent(self, args):
+        id_ = self["widget"].selection()[0]
+        if id_ == "": return None
+        item = self["widget"].item(id_)
+        a = {self["headers"][0]:item["text"]}
+        for i, h in enumerate(self["headers"][1:]): a[h] = item["values"][i]
+        return a
+    def getSelectedItem(self):
+        return self._decryptEvent(None)
+    def clear(self):
+        self["widget"].delete(*self["widget"].get_children())
+    def setTableHeaders(self, *args):
+        if isinstance(args[0], tuple) or isinstance(args[0], list):
+            args = args[0]
+        self["headers"] = [str(i) for i in args]
+        self._setAttribute("columns", self["headers"][1:])
+        self["widget"].column("#0", stretch=False)
+        self["widget"].heading("#0", text=self["headers"][0], anchor="w")
+        for i in self["headers"][1:]:
+            self["widget"].column(i, stretch=False)
+            self["widget"].heading(i, text=i, anchor="w")
+    def addEntry(self, *args, index="end"):
+        if isinstance(args[0], tuple) or isinstance(args[0], list):
+            args = args[0]
+        if len(self["headers"]) == 0:
+            raise TKExceptions.InvalidHeaderException("Set Tree Headers first!")
+        if len(self["headers"]) != len(list(args)):
+            raise TKExceptions.InvalidHeaderException("Length of headers must be the same as args of addEntry!")
+        self["widget"].insert(parent="", index=index, text=args[0], values=args[1:])
+    def createFolder(self, *args, index="end"):
+        if isinstance(args[0], tuple) or isinstance(args[0], list):
+            args = args[0]
+        if len(self["headers"]) == 0:
+            raise TKExceptions.InvalidHeaderException("Set Tree Headers first!")
+        if len(self["headers"]) != len(list(args)):
+            raise TKExceptions.InvalidHeaderException("Length of headers must be the same as args of addEntry!")
+        parent = self["widget"].insert(parent="", index=index, text=args[0], values=args[1:])
+        return _SubFolder(parent, self.data)
+class _SubFolder:
+    def __init__(self, parent, data):
+        self._parent = parent
+        self.data = data
+    def __getitem__(self, item):
+        return self.data[item]
+    def __setitem__(self, key, value):
+        self.data[key] = value
+    def addEntry(self, *args, index="end"):
+        if isinstance(args[0], tuple) or isinstance(args[0], list):
+            args = args[0]
+        if len(self["headers"]) == 0:
+            raise TKExceptions.InvalidHeaderException("Set Tree Headers first!")
+        if len(self["headers"]) != len(list(args)):
+            raise TKExceptions.InvalidHeaderException("Length of headers must be the same as args of addEntry!")
+        self["widget"].insert(parent=self._parent, index=index, text=args[0], values=args[1:])
+    def createFolder(self, *args, index="end"):
+        if isinstance(args[0], tuple) or isinstance(args[0], list):
+            args = args[0]
+        if len(self["headers"]) == 0:
+            raise TKExceptions.InvalidHeaderException("Set Tree Headers first!")
+        if len(self["headers"]) != len(list(args)):
+            raise TKExceptions.InvalidHeaderException("Length of headers must be the same as args of addEntry!")
+        parent = self["widget"].insert(parent=self._parent, index=index, text=args[0], values=args[1:])
+        return _SubFolder(parent, self.data)
+class SpinBox(Widget):
+    def __init__(self, _master, optionList:list=(), readOnly=True):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame):
+            self.data = {"master": _master,  "widget": _tk_.Spinbox(_master._get()), "readonly":readOnly, "init":{"state":"readonly" if readOnly else "normal", "values":list(optionList)}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def onButtonClick(self, func, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewCommand(self, func, [], defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+    def onUserInputEvent(self, func, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func, EventType.KEY_UP, [], decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def setValue(self, v, clearFirst=True):
+        disableAfterWrite = False
+        if self["readonly"]:
+            disableAfterWrite = True
+            self.setEnabled()
+        if clearFirst: self.clear()
+        self["widget"].insert(0, str(v))
+        if disableAfterWrite:
+            self._setAttribute("state", "readonly")
+        return self
+    def getValue(self)->str:
+        return self["widget"].get()
+    def setOptionList(self, l:list):
+        disableAfterWrite = False
+        if self["readonly"]:
+            disableAfterWrite = True
+            self.setEnabled()
+        self._setAttribute("values", l)
+        if disableAfterWrite:
+            self._setAttribute("state", "readonly")
+    def clear(self):
+        self["widget"].delete(0, "end")
+    def setButtonStyle(self, style:Style):
+        self._setAttribute("buttondownrelief", style.value if hasattr(style, "value") else style) #wtf
+        self._setAttribute("buttonup", style.value if hasattr(style, "value") else style)
+        return self
+    def setButtonBackground(self, color:Color):
+        self._setAttribute("buttonbackground", color.value if hasattr(color, "value") else color)
+        return self
+    def setButtonCursor(self, cursor:Cursor):
+        self._setAttribute("buttoncursor", cursor.value if hasattr(cursor, "value") else cursor)
+        return self
+    def setCursorColor(self, c:Color):
+        self._setAttribute("insertbackground", c.value if hasattr(c, "value") else c)
+        return self
+    def setCursorThickness(self, i:int):
+        self._setAttribute("insertwidth", i)
+        return self
+    def setCursorBlinkDelay(self, d:float):
+        self._setAttribute("insertofftime",  int(d * 1000))
+        self._setAttribute("insertontime", int(d * 1000))
+        return self
+    def _decryptEvent(self, args):
+        return self.getValue()
+class DropdownMenu(Widget):
+    def __init__(self, _master, optionList:list=(), readonly=True):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            stringVar = _tk_.StringVar()
+            self.data = {"master": _master,  "widget":ttk.Combobox(_master._get(), textvariable=stringVar), "values":optionList, "stringVar":stringVar, "readonly":readonly, "init":{"state":"readonly" if readonly else "normal", "values":list(optionList)}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def setReadOnly(self, b=True):
+        self["readonly"] = b
+        self._setAttribute("state", "readonly")
+    def setEnabled(self, e=False):
+        if self["readonly"] and not e:
+            self._setAttribute("state", "readonly")
+        else:
+            self._setAttribute("state", "normal")
+    def onSelectEvent(self, func, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewEvent(self, func,  EventType.COMBOBOX_SELECT, [], defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+    def onDropdownExpand(self, func, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewCommand(self, func, [], defaultArgs=defaultArgs, disableArgs=disableArgs, cmd="postcommand")
+    def onUserInputEvent(self, func, defaultArgs=False, disableArgs=False):
+        _EventHandler.registerNewValidateCommand(self, func, [], "all", decryptValueFunc=self._decryptEvent2, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def setValueByIndex(self, i:int):
+        disableAfterWrite = False
+        if self["readonly"]:
+            disableAfterWrite = True
+            self.setEnabled(True)
+        self["widget"].current(i)
+        if disableAfterWrite:
+            self._setAttribute("state", "readonly")
+    def clear(self):
+        disableAfterWrite = False
+        if self["readonly"]:
+            disableAfterWrite = True
+            self.setEnabled(True)
+        self["widget"].delete(0, "end")
+        if disableAfterWrite:
+            self._setAttribute("state", "readonly")
+    def setValue(self, text, clearFirst=True):
+        disableAfterWrite = False
+        if self["readonly"]:
+            disableAfterWrite = True
+            self.setEnabled(True)
+        if clearFirst: self["widget"].delete(0, "end")
+        self["widget"].insert(0, str(text))
+        if disableAfterWrite:
+            self._setAttribute("state", "readonly")
+    def getValue(self):
+        return self["widget"].get()
+    def setOptionList(self, l:list):
+        disableAfterWrite = False
+        if self["readonly"]:
+            disableAfterWrite = True
+            self.setEnabled(True)
+        self._setAttribute("values", l)
+        if disableAfterWrite:
+            self._setAttribute("state", "readonly")
+    def _decryptEvent(self, args):
+        return self["widget"].get()
+    def _decryptEvent2(self, args):
+        return args
+class Separator(Widget):
+    def __init__(self, _master):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master": _master,  "widget":ttk.Separator(_master._get())}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+class TaskBar(Widget):
+    def __init__(self, _master):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            if _master["hasMenu"]: raise RuntimeError("You cannot apply two Menus to the Window!") #@TODO Runtime ???
+            _master["hasMenu"] = True
+            self.data = {"master": _master,  "widget": _tk_.Menu(_master._get(), fg="red"), "subMenu":[]}
+            _master._get().config(menu=self.data["widget"])
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def createSubMenu(self, name:str):
+        m = _SubMenu(self["master"], self["widget"], self.data)
+        #_SubMenu._SUB_MENUS.append(m)
+        self["subMenu"].append(m)
+        self["widget"].add("cascade", label=name, menu=m._menu)
+        return m
+    def place(self, x=0, y=0, width=None, height=None, anchor=Anchor.UP_LEFT):
+        pass
+    def grid(self, row=0, column=0):
+        pass
+    def create(self):
+        for i in self["subMenu"]: i._create()
+class _SubMenu:
+    _SUB_MENUS = []
+    def __init__(self, master, menu, data):
+        self._id = "".join([str(r.randint(0,9)) for _ in range(15)])
+        self._widgets = [] #[["command", <type: Button>], ["cascade", <type: Button>, <type: SubMenu>]]
+        self.data = data
+        self.data["created"] = False
+        self._master = master
+        self._menu = _tk_.Menu(menu, tearoff=False)
+    def createSubMenu(self, button:Button):
+        m = _SubMenu(self._master, self._menu, self.data)
+        self._widgets.append(["cascade", button, m])
+        return m
+    def addSeparator(self):
+        self._widgets.append(["separator", None])
+    def _create(self): #@TODO fix if menus are created after mainloop
+        #if self.data["created"]: return#@TODO FIX self.data["create"] is True
+        for widget in self._widgets:
+            if widget[1] is not None:
+                data = widget[1]["widgetProperties"].copy()
+                if data.keys().__contains__("text"): data["label"] = data["text"]
+                if widget[0] == "cascade": data["menu"] = widget[2]._menu if hasattr(widget[2], "_menu") else widget[2]
+                self._menu.add(widget[0], **{k:v for k, v in zip(data.keys(), data.values()) if ['accelerator', 'activebackground', 'activeforeground', 'background', 'bitmap', 'columnbreak', 'command', 'compound', 'font', 'fg', 'bg', 'hidemargin', 'image', 'label', 'menu', 'offvalue', 'onvalue', 'selectcolor', 'selectimage', 'state', 'underline', 'value', 'variable'].__contains__(k)})
+                if widget[0] == "cascade" and hasattr(widget[2], "_create"): widget[2]._create()
+            else:
+                #print(type(widget[0]), widget)
+                self._menu.add(widget[0], {})
+        self.data["created"] = True
+class ContextMenu(Widget):
+    def __init__(self, _master, closable=True, eventType:Union[EventType, Key, Mouse, None]=EventType.key(Mouse.RIGHT_CLICK)):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif hasattr(_master, "_get"):
+            self.data = {"master": _master,  "widget": _tk_.Menu(_master._get(), tearoff=0), "subMenu":[], "closable":closable, "eventType":eventType}
+            if eventType is not None: _EventHandler.registerNewEvent(_master, self.open,  eventType, [], decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def createSubMenu(self):
+        m = _SubMenu(self["master"], self["widget"], self.data)
+        m._menu = self["widget"]
+        self["subMenu"].append(m)
+        return m
+    def bindToWidget(self, widg):
+        _EventHandler.registerNewEvent(widg, self.open,  self["eventType"], [], decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
+    def open(self, loc:Location2D):
+        if hasattr(loc, "getValue"):
+            loc = Location2D(loc.getValue())
+            
+        try:
+            self["widget"].tk_popup(loc.getX(), loc.getY())
+        finally:
+            if not self["closable"]:#fuer Fabi :^)
+                self["widget"].grab_release()
+    def _decryptEvent(self, e):
+        return Location2D(e.x_root, e.y_root)
+    def place(self, x=0, y=0, width=None, height=None, anchor=Anchor.UP_LEFT):
+        pass
+    def grid(self, row=0, column=0):
+        pass
+    def create(self):
+        for i in self["subMenu"]: i._create()
+class NotebookTab(Widget):
+    def __init__(self, _master, notebook=None, name=None):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master": _master, "widget": _tk_.Frame(notebook._get()), "tabWidget": notebook, "tabId": None}
+            notebook._get().add(self.data["widget"], text=name)
+            self.data["tabId"] = self.getNumberOfTabs()-1
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def getTabIndex(self):
+        return self["tabWidget"]._getTabId(self)
+    def getTabName(self):
+        return self["tabWidget"]._get().tab(self["tabId"], "text")
+    def setTabName(self, text):
+        self["tabWidget"]._get().tab(self["tabId"], text=text(text))
+        return self
+    def setSelected(self):
+        self["tabWidget"]._get().select(self["tabId"])
+        return self
+    def getNumberOfTabs(self):
+        return self["tabWidget"]._get().index("end")
+    def destroy(self):
+        assert self["alive"], "Widget is already destroyed!"
+        for id, widg in zip(self["childWidgets"].keys(), self["childWidgets"].values()):
+            _EventHandler.unregisterAllEventsFormID(widg["id"])
+            self["tkMaster"]._unregisterOnResize(widg)
+        _EventHandler.unregisterAllEventsFormID(self["id"])
+        self["tabWidget"]["tabIndexList"].remove(self)
+        self["tkMaster"]._unregisterOnResize(self)
+        self["widget"].destroy()
+        self["alive"] = False
+class Notebook(Widget):
+    _INITIALIZED = False
+    def __init__(self, _master, closable=False):
+        if not self._INITIALIZED and closable:
+            self._initializeCustomStyle()
+            Notebook.__initialized = True
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master":_master,  "widget":ttk.Notebook(_master._get()), "tabIndexList":[], "runnable":None, "init":{"func":self._init, "style":"CustomNotebook" if closable else ""}}
+            if closable:
+                self._get().bind("<ButtonPress-1>", self._on_close_press, True)
+                self._get().bind("<ButtonRelease-1>", self._on_close_release)
+                self._active = None
+                self._name = ""
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def _init(self):
+        self.onTabSelectEvent(self._updateTab)
+    def onTabSelectEvent(self, func, args:list=None, disableArgs=False, defaultArgs=False):
+        _EventHandler.registerNewEvent(self, func, EventType.customEvent("<<NotebookTabChanged>>"), args, decryptValueFunc=self._decryptEvent, disableArgs=disableArgs, defaultArgs=defaultArgs)
+    def setCtrlTabEnabled(self):
+        self["widget"].enable_traversal()
+        return self
+    def getSelectedTabIndex(self):
+        return self["widget"].index("current")
+    def getSelectedTabName(self):
+        return self["widget"].tab(self.getSelectedTabIndex(), "text")
+    def createNewTab(self, name)->NotebookTab:
+        nbt = NotebookTab(self["master"], self, name)
+        self["tabIndexList"].append(nbt)
+        return nbt
+    def _decryptEvent(self, args):
+        return self.getSelectedTabIndex()
+    def _initializeCustomStyle(self):
+        style = ttk.Style()
+        self.images = (
+            _tk_.PhotoImage("img_close",
+                          data="R0lGODlhCAAIAMIBAAAAADs7O4+Pj9nZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
+            _tk_.PhotoImage("img_closeactive",
+                          data="R0lGODlhCAAIAMIEAAAAAP/SAP/bNNnZ2cbGxsbGxsbGxsbGxiH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
+            _tk_.PhotoImage("img_closepressed",
+                          data="R0lGODlhCAAIAMIEAAAAAOUqKv9mZtnZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs=")
+        )
+
+        style.element_create("close", "image", "img_close",
+                             ("active", "pressed", "!disabled", "img_closepressed"),
+                             ("active", "!disabled", "img_closeactive"), border=8, sticky='')
+        style.layout("CustomNotebook", [("CustomNotebook.client", {"sticky": "nswe"})])
+        style.layout("CustomNotebook.Tab", [
+            ("CustomNotebook.tab", {
+                "sticky": "nswe",
+                "children": [
+                    ("CustomNotebook.padding", {
+                        "side": "top",
+                        "sticky": "nswe",
+                        "children": [
+                            ("CustomNotebook.focus", {
+                                "side": "top",
+                                "sticky": "nswe",
+                                "children": [
+                                    ("CustomNotebook.label", {"side": "left", "sticky": ''}),
+                                    ("CustomNotebook.close", {"side": "left", "sticky": ''}),
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            })
+        ])
+    def onCloseEvent(self, func, defaultArgs=False, disableArgs=False, getIdInsteadOfName=False):
+        runnable = _EventHandler.registerNewCustomEvent(self, func, [], decryptValueFunc=self._decryptValueID if getIdInsteadOfName else self._decryptValueNAME, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        self["runnable"] = runnable
+    def _decryptValueID(self, e):
+        return self._active
+    def _decryptValueNAME(self, e):
+        return self._name
+    def _on_close_press(self, event):
+        """Called when the button is pressed over the close button"""
+        element = self["widget"].identify(event.x, event.y)
+        if "close" in element:
+            index = self["widget"].index("@%d,%d" % (event.x, event.y))
+            self["widget"].state(['pressed'])
+            self._active = index
+            return "break"
+    def _on_close_release(self, event):
+        """Called when the button is released"""
+        if not self["widget"].instate(['pressed']):
+            return
+        element = self["widget"].identify(event.x, event.y)
+        if "close" not in element:
+            # user moved the mouse off of the close button
+            return
+        index = self["widget"].index("@%d,%d" % (event.x, event.y))
+        self._name = self["widget"].tab(index, "text")
+        if self._active == index and (self["runnable"] is None or (self["runnable"] is not None and not self["runnable"]()["setCanceled"])):
+            self["widget"].forget(index)
+            self["tabIndexList"].pop(index)
+            self["widget"].event_generate("<<NotebookTabClosed>>")
+        self["widget"].state(["!pressed"])
+        self._active = None
+        self._updateTab(self.getSelectedTabIndex())
+    def _updateTab(self, e):
+        for widget in Tk._getAllChildWidgets(self["tabIndexList"][e.getValue() if hasattr(e, "getValue") else e]):
+            self["tkMaster"]._updateDynamicSize(widget)
+
+#finish
+class Canvas(Widget):
+    def __init__(self, _master):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            self.data = {"master": _master,  "widget": _tk_.Canvas(_master._get()), "canObjs":{}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def clear(self):
+        for i in list(self["canObjs"].values()).copy():
+            i.destroy()
+
+class CanvasObject:
+    def __init__(self, _ins, data):
+        self._ins = _ins
+        self.data = data
+        if not list(self.data.keys()).__contains__("id"):
+            self.data["id"] = "".join([str(r.randint(0,9)) for _ in range(15)])
+            _EventHandler._Events[self.data["id"]] = []
+            self.data["master"]["canObjs"][self._ins["id"]] = self._ins
+    def __getitem__(self, item):
+        return self.data[item]
+    def __setitem__(self, key, value):
+        self.data[key] = value
+    def bind(self, func, event: Union[EventType, Key, Mouse], args: list = None, defaultArgs=False, disableArgs=False):
+        #assert self["objID"] is None, "Render canvasOnj before binding!"
+        _EventHandler.registerNewTagBind(self, self["objID"], func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def render(self):
+        self.destroy()
+        if "loc2" not in list(self.data.keys()):
+            self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY(), self["loc1"].getX()+self["width"], self["loc1"].getY()+self["height"]), kw=self["data"])
+        else:
+            self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY(), self["loc2"].getX(), self["loc2"].getY()), kw=self["data"])
+        self.data["master"]["canObjs"][self._ins["id"]] = self._ins
+        return self
+    def setLocation(self, loc:Location2D):
+        self["loc1"] = loc.clone()
+        return self
+    def setSecondLoc(self, loc:Location2D):
+        self["loc2"] = loc.clone()
+        return self
+    def setWidth(self, w):
+        self["width"] = int(w)
+        return self
+    def setHeight(self, l):
+        self["height"] = int(l)
+        return self
+    def setBg(self, col: Color):
+        self["data"]["fill"] = col.value if hasattr(col, "value") else col
+        return self
+    def setOutlineColor(self, col: Color):
+        self["data"]["outline"] = col.value if hasattr(col, "value") else col
+        return self
+    def setAnchor(self, anchor):
+        self["data"]["anchor"] = anchor.value if hasattr(anchor, "value") else anchor
+    def clone(self):
+        data = self.data.copy()
+        data["objID"] = None
+        return self._ins.__class__(data)
+    def destroy(self):
+        if self.data["objID"] is not None and self._ins["id"] in self["master"]["canObjs"]:
+            _EventHandler.unregisterAllEventsFormID(self["id"])
+            self["master"]["canObjs"].pop(self._ins["id"])
+            self["master"]._get().delete(self["objID"])
+            self["objID"] = None
+    def _get(self):
+        return self.data["master"]._get()
+class CanvasRect(CanvasObject):
+    def __init__(self, _master=None):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Canvas):
+            self.data = {"master": _master, "objID":None, "widget":None, "type":"rectangle", "data":{}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance or Canvas not: " + str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+class CanvasCircle(CanvasObject): #TODO calculate from radians
+    def __init__(self, _master=None):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Canvas):
+            self.data = {"master": _master, "objID":None, "widget":None, "type":"oval", "data":{}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance or Canvas not: " + str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+class CanvasLine(CanvasObject):
+    def __init__(self, _master=None):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Canvas):
+            self.data = {"master": _master, "objID":None, "widget":None, "type":"line", "data":{}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance or Canvas not: " + str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+class CanvasText(CanvasObject):
+    def __init__(self, _master=None):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Canvas):
+            self.data = {"master": _master, "objID":None, "widget":None, "type":"text", "data":{}}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance or Canvas not: " + str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def setText(self, text):
+        self["data"]["text"] = str(text)
+        return self
+    def setFont(self, size, art=FontType.ARIAL):
+        self["data"]["font"] = art.value if hasattr(art, "value") else art
+        self["data"]["size"] = int(size)
+        return self
+    def render(self):
+        if "loc2" not in list(self.data.keys()):
+            self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY()), kw=self["data"])
+        else:
+            self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY()), kw=self["data"])
+        return self
+    def setTextAngle(self, a):
+        self["data"]["angle"] = int(a)
+        return self
+
+class FileDialog:
+    @staticmethod
+    def openFile(master=None, title=None, initialpath=None, types=None):
+        if types is None:
+            types = []
+        return FileDialog._dialog(fd.askopenfilename, master=master, title=title, initialpath=initialpath, types=types)
+    @staticmethod
+    def openDirectory(master=None, title=None, initialpath=None):
+        return FileDialog._dialog(fd.askdirectory, master=master, title=title, initialpath=initialpath)
+    @staticmethod
+    def saveFile(master=None, title=None, initialpath=None, types=None):
+        if types is None:
+            types = []
+        return FileDialog._dialog(fd.asksaveasfilename, master=master, title=title, initialpath=initialpath, types=types)
+    @staticmethod
+    def _dialog(func, master=None, title=None, initialpath=None, types=None):
+        if types is None:
+            types = []
+        destroy=False
+        _types=()
+        _types += (("", "",), ("", "",))
+        if type(types) == list:
+            for i in types:
+                if str(i).startswith("."):
+                    _types+=(("", "*"+str(i),),)
+                elif str(i).startswith("*."):
+                    _types += (("", str(i),),)
+                else:
+                    raise TKExceptions.InvalidFileExtention(str(i)+" is not a valid Extention! Use .<ext>!")
+        data = {"title":str(title),
+                "filetypes":_types,
+                "initialdir":initialpath}
+        if initialpath is not None and os.path.split(initialpath)[1]!="" and False:# Disabled
+            data["initialfile"] = os.path.split(initialpath)[1]
+        if master is None:
+            destroy = True
+            master = Tk()
+            master.hide()
+            data["parent"] = master._get()
+        path = func(**data)
+        if destroy: master.destroy()
+        if path == "" or path is None:
+            return None
+        return path
+class SimpleDialog:
+    @staticmethod
+    def askYesNo(master, message="", title=""):
+        return SimpleDialog._dialog(msg.askyesno, master, message, title)
+    @staticmethod
+    def askYesNoCancel(master, message="", title=""):
+        return SimpleDialog._dialog(msg.askyesnocancel, master, message, title)
+    @staticmethod
+    def askOkayCancel(master, message="", title=""):
+        """
+
+        @rtype: object
+        @param master:
+        @param message:
+        @param title:
+        @return: True or False
+        """
+        return SimpleDialog._dialog(msg.askokcancel, master, message, title)
+    @staticmethod
+    def askRetryCancel(master, message="", title=""):
+        return SimpleDialog._dialog(msg.askretrycancel, master, message, title)
+    @staticmethod
+    def info(master, message="", title=""):
+        return SimpleDialog._dialog(msg.showinfo, master, message, title)
+    @staticmethod
+    def error(master, message="", title=""):
+        return SimpleDialog._dialog(msg.showerror, master, message, title)
+    @staticmethod
+    def warning(master, message="", title=""):
+        return SimpleDialog._dialog(msg.showwarning, master, message, title)
+    @staticmethod
+    def _dialog(d, master, message="", title=""):
+        if isinstance(master, Tk):
+            return d(title=title, message=message, parent=master._get())
+        else:
+            mas = Tk()
+            mas.hide()
+            anw = d(title=message, message=str(master), parent=mas._get())
+            mas.destroy()
+            return anw
+class ColorChooser:
+    def __init__(self, c):
+        self._c = c
+    def getHex(self):
+        return self._c[1]
+    def getRGB(self):
+        return self._c[0]
+    def __str__(self):
+        return self.getRGB()
+    @staticmethod
+    def askColor(master, initialcolor=None, title=""):
+        if isinstance(master, Tk):
+            return ColorChooser(colorChooser.askcolor(initialcolor=initialcolor.value if hasattr(initialcolor, "value") else initialcolor, parent=master._get(), title=str(title)))
+        else:
+            mas = Tk()
+            mas.hide()
+            anw = ColorChooser(colorChooser.askcolor(initialcolor=master.value if hasattr(master, "value") else master, parent=mas._get(), title=initialcolor))
+            mas.destroy()
+            return anw
+
+
+if __name__ == '__main__':
+    global text, i
+    i = 0
+    def add():
+        t.sleep(.5)
+        text.addLine(str(i))
+        i+=1
+    master = Tk()
+
+    text = Text(master, forceScroll=True)
+    text.place()
+    master.runTaskAfter(2, add)
+    master.mainloop()
