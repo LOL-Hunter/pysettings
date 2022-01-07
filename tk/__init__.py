@@ -4,9 +4,9 @@ import tkinter.filedialog as fd
 import tkinter.scrolledtext as _text
 import tkinter.ttk as ttk
 import tkinter as _tk_
+import threading as th
 from typing import Union, Callable
 from datetime import date
-
 try:
     from ..geometry import Location2D, _map
 except ImportError:
@@ -293,15 +293,29 @@ class TkImage:
 class Event:
     def __init__(self, dic=None):
         if dic is None:
-            self.data = {"afterTriggered":None, "setCanceled": False, "widget": None, "args":[],"tkArgs":None, "func":None, "value":None, "eventType":None, "defaultArgs":False, "disableArgs":True, "decryptValueFunc":None, "forceReturn":None}
+            self.data = {"afterTriggered":None,
+                         "setCanceled": False,
+                         "widget": None,
+                         "args":[],
+                         "priority":0,
+                         "tkArgs":None,
+                         "func":None,
+                         "value":None,
+                         "eventType":None,
+                         "defaultArgs":False,
+                         "disableArgs":True,
+                         "decryptValueFunc":None,
+                         "forceReturn":None}
         else:
             self.data = dic.data
     def __repr__(self):
-        return str(self.data)
+        return "Event({func: <"+str(self["func"].__name__)+">, args:"+str(self["args"])+", priority:"+str(self["priority"])+"})"
     def __getitem__(self, item):
         return self.data[item]
     def __setitem__(self, key, value):
         self.data[key] = value
+    def __lt__(self, other):
+        return self["priority"] < other["priority"]
     def getTkArgs(self):
         return self["tkArgs"]
     def setCanceled(self, b:bool=True):
@@ -318,66 +332,121 @@ class Event:
         print("This Event[type: "+self["eventType"]+"] was triggered by "+str(type(self["widget"]))+"! | Args:"+str(self["args"]))
 class ScrollBarEvent(Event):
     pass
-
-class _EventHandler:
-    _Events = {} #save in Individual instance!
-    def __init__(self, event):
-        self.event = Event(event)
+class _EventRegistry:
+    def __init__(self, ins):
+        if isinstance(ins, Widget) or isinstance(ins, Tk):
+            self.data = {"event":{}} # event : { type_ : ( <type:_EventHandler>, [<type:Event>, ...] ) }
+        elif isinstance(ins, dict):
+            self.data = ins
+        elif isinstance(ins, _EventRegistry):
+            self.data = ins.data
+        else:
+            raise TKExceptions.InvalidWidgetTypeException("ins must be " + str(self.__class__.__name__) + " instance not: " + str(ins.__class__.__name__))
     def __repr__(self):
-        return str(self.__class__.__name__)+"("+str(self.event)+")"
+        return str(self.__class__.__name__)+"("+str(self.data)+")"
+    def __getitem__(self, item):
+        return self.data[item]
+    def __setitem__(self, key, value):
+        self.data[key] = value
+    def rawCallable(self):
+        return None
+    def addEvent(self, event, type_):
+        if type_ in self["event"].keys():
+            self["event"][type_][1].append(event)
+            self["event"][type_][1].sort()
+            self["event"][type_][1].reverse()
+            print("sort")
+            return
+        else:
+            handler = EventHandler(event)
+            self["event"][type_] = (handler, [event])
+            return handler
+    def getRegisteredEvents(self, type_):
+        return self["event"][type_][1]
+    def getCallables(self, type_):
+        if type_ in self["event"].keys():
+            return self["event"][type_][1]
+        return None
+    def getHandler(self, type_):
+        if type_ in self["event"].keys():
+            return self["event"][type_][0]
+        return None
+    def unregisterType(self, type_):
+        if hasattr(type_, "value"):
+            eventType = type_.value
+        if type_ in self["event"].keys():
+            _e = Event(self["event"][type_][0].event)
+            _e.getWidget()._get().unbind(_e.getEventType())
+            self["event"].pop(type_)
+    def unregisterAll(self):
+        for i in self["event"].values():
+            _e = Event(i[0].event)
+            _e.getWidget()._get().unbind(_e.getEventType())
+        self["event"] = {}
+class EventHandler:
+    DEBUG = False
+    #_Events = {} #save in Individual instance! { <obj_id> : <type: _EventHandler> }
+    def __init__(self, event):
+        assert isinstance(event, Event), "Do not instantiate this class by yourself!"
+        self.event = Event(event)
+        #print(self.event.getWidget()["registry"], self.event.getWidget())
+    def __repr__(self):
+        return "EventHandler("+"{eventType:"+str(self.event["eventType"])+"}) bind on: \n\t-"+"\n\t-".join([str(i) for i in self.event["widget"]["registry"].getRegisteredEvents(self.event["eventType"])])
     def __getitem__(self, item):
         return self.event[item]
     def __setitem__(self, key, value):
         self.event[key] = value
     def __call__(self, *args):
+        if EventHandler.DEBUG:
+            print(self)
         args = args[0] if len(args) == 1 else list(args)
-        if self.event["func"] is not None:
+        event = None
+        out = None
+        for event in self.event["widget"]["registry"].getCallables(self.event["eventType"]): #TODO get only the output of the last called func. problem? maybe priorities
+            func = event["func"]
 
-            assert isinstance(self.event["func"], Callable), self.event["eventType"]+" binded Func is not callable "+str(type(self["func"]))+" instead!"
-            self.event["tkArgs"] = args
-            if self.event["decryptValueFunc"] is not None:
-                self.event["value"] = self.event["decryptValueFunc"](args) #TODO self.event in 'decryptValueFunc'
-                if self.event["value"] == "CANCEL":
+            event["tkArgs"] = args
+            if event["decryptValueFunc"] is not None:
+                event["value"] = event["decryptValueFunc"](args) #TODO event in 'decryptValueFunc'
+                if event["value"] == "CANCEL":
                     return
-            if not self.event["disableArgs"]:
-                if not self.event["defaultArgs"]:
-                    args = self.event
-                out = self.event["func"](args)
+            if not event["disableArgs"]:
+                if not event["defaultArgs"]:
+                    args = event
+                    out = func(args)
             else:
-                if self.event["forceReturn"] is None:
-                    out = self.event["func"]()
-                else:
-                    out = self.event["func"]()
-            if self.event["afterTriggered"] is not None: self.event["afterTriggered"](self.event)
-            if self.event["forceReturn"] is None:
-                if self.event["forceReturn"]:
-                    return self.event["forceReturn"]
-                else: return out
-            else:
-                return self.event["forceReturn"]
+                out = func()
+                if event["afterTriggered"] is not None: event["afterTriggered"](event)
+        if event is None: return
+        if event["forceReturn"] is None:
+            if event["forceReturn"]:
+                return event["forceReturn"]
+            else: return out
+        else: return event["forceReturn"]
+
     @staticmethod
-    def unregisterAllEventsFormID(id_):
-        for _event in _EventHandler._Events[id_]:
-            if not any([_event["eventType"]==i for i in ("cmd", "vcmd", "trac", "custom")]):
-                if hasattr(_event["widget"], "unbind"): _event["widget"].unbind(_event["eventType"])
-        if list(_EventHandler._Events.keys()).__contains__(id_): _EventHandler._Events[id_] = []
+    def setEventDebug(b:bool):
+        EventHandler.DEBUG = b
+
     @staticmethod
-    def unregisterEventFormID(id_, event):
-        event = event.value if hasattr(event, "value") else event
-        if list(_EventHandler._Events.keys()).__contains__(id_):
-            for _event in _EventHandler._Events[id_]:
-                if not any([_event["eventType"]==i for i in ("cmd", "vcmd", "trac", "custom")]) and (event.value if hasattr(event, "value") else event) == (_event["eventType"].value if hasattr(_event["eventType"], "value") else _event["eventType"]):
-                    _event["widget"]._get().unbind(_event["eventType"])
-                    _EventHandler._Events[id_].remove(_event)
-                    #@TODO TEST
-    @staticmethod
-    def triggerEventByID(id_):
-        for i in _EventHandler._Events[id_]: i()
-    @staticmethod
-    def getEventByID(id_)->[]:
-        return _EventHandler._Events[id_]
-    @staticmethod
-    def registerNewEvent(obj, func, eventType:Union[EventType, Key, Mouse], args: list, decryptValueFunc=None, defaultArgs=False, disableArgs=False, bindFunc="bind"):
+    def _registerNewEvent(obj, func, eventType:Union[EventType, Key, Mouse], args: list, priority:int, decryptValueFunc=None, defaultArgs=False, disableArgs=False):
+        """
+        This is the intern Event-Register
+
+
+        @param obj: the widget
+        @param func: the target function to be bound
+        @param eventType: the event type to trigger the event
+        @param args: arguments which are transferred to the function
+        @param decryptValueFunc: this function gets called before the binded func was called
+        @param defaultArgs: this bool decides if the 'Event' instance or the mormal tkinter args are passed into the target function
+        @param disableArgs: if this is True no arguments will be passed
+        @param bindFunc: which tkinter bind function is used
+        @return: None
+        """
+        if hasattr(eventType, "value"):
+            eventType = eventType.value
+        assert isinstance(func, Callable), eventType + " binded Func is not callable " + str(func) + " instead!"
         event = Event()
         event["defaultArgs"] = defaultArgs
         event["disableArgs"] = disableArgs
@@ -385,14 +454,13 @@ class _EventHandler:
         event["args"] = args
         event["func"] = func
         event["decryptValueFunc"] = decryptValueFunc
-        if hasattr(eventType, "value"):
-            eventType = eventType.value
         event["eventType"] = eventType
-        handler = _EventHandler(event)
-        _EventHandler._Events[obj["id"]].append(handler)
-        getattr(obj._get(), bindFunc)(eventType, handler)
+        event["priority"] = priority
+        handler = obj["registry"].addEvent(event, eventType)
+        if handler is not None: obj._get().bind(eventType, handler)
     @staticmethod
-    def registerNewCommand(obj, func, args:Union[list, None], decryptValueFunc=None, defaultArgs=False, disableArgs=False, onlyGetRunnable=False, cmd="command"):
+    def _registerNewCommand(obj, func, args:Union[list, None], priority:int, decryptValueFunc=None, defaultArgs=False, disableArgs=False, onlyGetRunnable=False, cmd="command"):
+        assert isinstance(func, Callable), "command binded Func is not callable " + str(func) + " instead!"
         event = Event()
         event["defaultArgs"] = defaultArgs
         event["disableArgs"] = disableArgs
@@ -401,71 +469,74 @@ class _EventHandler:
         event["func"] = func
         event["decryptValueFunc"] = decryptValueFunc
         event["eventType"] = "cmd"
-        handler = _EventHandler(event)
-        _EventHandler._Events[obj["id"]].append(handler)
+        handler = obj["registry"].addEvent(event, "cmd")
         if not onlyGetRunnable:
-            obj._get()[cmd] = handler
+            if handler is not None: obj._get()[cmd] = handler
         else:
             return handler
         return event
     @staticmethod
-    def registerNewValidateCommand(obj, func, args: list, type_="all", decryptValueFunc=None, defaultArgs=False, disableArgs=False):
+    def _registerNewValidateCommand(obj, func, args:list, priority:int, type_="all", decryptValueFunc=None, defaultArgs=False, disableArgs=False):
+        assert isinstance(func, Callable), "vCommand binded Func is not callable " + str(func) + " instead!"
         event = Event()
         event["defaultArgs"] = defaultArgs
         event["disableArgs"] = disableArgs
         event["widget"] = obj
         event["args"] = args
         event["func"] = func
+        event["priority"] = priority
         event["decryptValueFunc"] = decryptValueFunc
         event["forceReturn"] = True
         event["eventType"] = "vcmd"
-        handler = _EventHandler(event)
-        _EventHandler._Events[obj["id"]].append(handler)
-        obj["widget"]["validate"] = type_
-        obj["widget"]["validatecommand"] = (obj["master"]._get().register(handler), '%P')
+        handler = obj["registry"].addEvent(event, "vcmd")
+        if handler is not None:
+            obj["widget"]["validate"] = type_
+            obj["widget"]["validatecommand"] = (obj["master"]._get().register(handler), '%P')
     @staticmethod
-    def registerNewTracer(obj, var, func, args: list, decryptValueFunc=None, defaultArgs=False, disableArgs=False):
+    def _registerNewTracer(obj, var, func, args:list, priority:int, decryptValueFunc=None, defaultArgs=False, disableArgs=False):
+        assert isinstance(func, Callable), "tracer binded Func is not callable " + str(func) + " instead!"
         event = Event()
         event["defaultArgs"] = defaultArgs
         event["disableArgs"] = disableArgs
         event["widget"] = obj
         event["args"] = args
         event["func"] = func
+        event["priority"] = priority
         event["decryptValueFunc"] = decryptValueFunc
-        event["eventType"] = "trac"
-        handler = _EventHandler(event)
-        _EventHandler._Events[obj["id"]].append(handler)
-        var.trace("w", handler)
+        event["eventType"] = "trace"
+        handler = obj["registry"].addEvent(event, "trace")
+        if handler is not None: var.trace("w", handler)
     @staticmethod
-    def registerNewCustomEvent(obj, func, args, decryptValueFunc=None, defaultArgs=False, disableArgs=False, after=None):
+    def _registerNewCustomEvent(obj, func, args, priority:int, decryptValueFunc=None, defaultArgs=False, disableArgs=False, after=None):
+        assert isinstance(func, Callable), "CustomEvent binded Func is not callable " + str(func) + " instead!"
         event = Event()
         event["defaultArgs"] = defaultArgs
         event["disableArgs"] = disableArgs
         event["widget"] = obj
         event["args"] = args
         event["func"] = func
+        event["priority"] = priority
         event["decryptValueFunc"] = decryptValueFunc
         event["afterTriggered"] = after
         event["eventType"] = "custom"
-        handler = _EventHandler(event)
-        _EventHandler._Events[obj["id"]].append(handler)
+        handler = obj["registry"].addEvent(event, "custom")
         return handler
     @staticmethod
-    def registerNewTagBind(obj, id_, func, eventType: Union[EventType, Key, Mouse], args: list, decryptValueFunc=None, defaultArgs=False, disableArgs=False, bindFunc="bind"):
-        #print("bind:", eventType, type(obj))
+    def _registerNewTagBind(obj, id_, func, eventType: Union[EventType, Key, Mouse], args: list, priority:int, decryptValueFunc=None, defaultArgs=False, disableArgs=False):
+        if hasattr(eventType, "value"):
+            eventType = eventType.value
+        assert isinstance(func, Callable), eventType + " binded Func is not callable " + str(func) + " instead!"
         event = Event()
         event["defaultArgs"] = defaultArgs
         event["disableArgs"] = disableArgs
         event["widget"] = obj
         event["args"] = args
         event["func"] = func
+        event["priority"] = priority
         event["decryptValueFunc"] = decryptValueFunc
-        if hasattr(eventType, "value"):
-            eventType = eventType.value
         event["eventType"] = eventType
-        handler = _EventHandler(event)
-        _EventHandler._Events[obj["id"]].append(handler)
-        obj._get().tag_bind(id_, eventType, handler)
+        handler = obj["registry"].addEvent(event, eventType)
+        if handler is not None: obj._get().tag_bind(id_, eventType, handler)
 class TaskScheduler:
     def __init__(self, master, delay, func, repete=False, dynamic=False):
         if hasattr(master, "_get"):
@@ -498,16 +569,37 @@ class IntVar:
     def set(self, v:int):
         self._intvar.set(v)
 
+class Window:
+    def __init__(self, ins):
+        self.loopInterval = 0
+        self.ins = ins
+        self.master = Tk()
+    def setLoopInterval(self, sec):
+        self.loopInterval = sec
+    def mainloop(self):
+        if hasattr(self.ins, "loop"): self.ins.onEnable()
+        th.Thread(target=self._loop).start()
+        self.master.mainloop()
+    def onEnable(self):
+        pass
+    def loop(self):
+        pass
+    def _loop(self):
+        while True:
+            if hasattr(self.ins, "loop"):
+                t.sleep(self.loopInterval)
+                self.ins.loop()
+
 class Tk:
     """
     The toplevel window class
 
     """
     def __init__(self, _master=None):
+        self.title = self.setTitle
         self.quit = self.quitMainLoop
         if _master is None:
-            self.data = {"master": _tk_.Tk(), "isRunning":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}}
-            _EventHandler._Events[self.data["id"]] = []
+            self.data = {"master": _tk_.Tk(), "registry":_EventRegistry(self), "isRunning":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}}
         elif isinstance(_master, dict):
             self.data = _master
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab):
@@ -524,7 +616,7 @@ class Tk:
         task = TaskScheduler(self, 0, func)
         task._id = self["master"].after(0, task)
         return task
-    def runTaskAfter(self, time, func):
+    def runTaskAfter(self, func, time):
         task = TaskScheduler(self, time, func)
         task._id = self["master"].after(time * 1000, task)
         return task
@@ -532,7 +624,7 @@ class Tk:
         task = TaskScheduler(self, 0, func, repete=True)
         task._id = self["master"].after(0, task)
         return task
-    def runDelayLoop(self, delay, func):
+    def runDelayLoop(self, func, delay):
         task = TaskScheduler(self, delay, func, repete=True)
         task._id = self["master"].after(0, task)
         return task
@@ -544,8 +636,8 @@ class Tk:
         return self["isRunning"]
     def throwErrorSound(self):
         self["master"].bell()
-    def onWindowResize(self, func, args:list=None, defaultArgs=False, disableArgs=False, filterEvent=True):
-        _EventHandler.registerNewEvent(self, func, EventType.key("<Configure>"), args, decryptValueFunc=(self._decryptWindowResize if filterEvent else self._decryptNonFilteredWindowResize), defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onWindowResize(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False, filterEvent=True):
+        EventHandler._registerNewEvent(self, func, EventType.key("<Configure>"), args, priority, decryptValueFunc=(self._decryptWindowResize if filterEvent else self._decryptNonFilteredWindowResize), defaultArgs=defaultArgs, disableArgs=disableArgs)
     def copyToClip(self, s):
         self["master"].clipboard_append(str(s))
         return self
@@ -563,14 +655,14 @@ class Tk:
         self["master"].deiconify()
     #def bindToWidgetType(self, func, eventType:Union[EventType, Key, Mouse], event, args:list=None, defaultArgs=False, disableArgs=False):
         #_EventHandler.registerNewEvent(self, func, event.__name__, args, defaultArgs=defaultArgs, disableArgs=disableArgs, bindFunc="bind_class")
-    def bind(self, func, event:Union[EventType, Key, Mouse], args:list=None, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs)
-    def bindAll(self, func, event: Union[EventType, Key, Mouse], args: list=None, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs, bindFunc="bind_all")
+    def bind(self, func, event:Union[EventType, Key, Mouse], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    #def bindAll(self, func, event: Union[EventType, Key, Mouse], args: list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        #EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, bindFunc="bind_all")
     def unbindEvent(self, event:Union[EventType, Key, Mouse]):
-        _EventHandler.unregisterEventFormID(self["id"], event)
+        self["registry"].unregisterType(event)
     def unbindAllEvents(self):
-        _EventHandler.unregisterAllEventsFormID(self["id"])
+        self["registry"].unregisterAll()
     def getWidgetFromTk(self, w):
         for widg in self._getAllChildWidgets(self):
             pass
@@ -624,11 +716,11 @@ class Tk:
         if str(x).find("-") == -1: x = "+" + str(x)
         if str(y).find("-") == -1: y = "+" + str(y)
         self["master"].geometry(str(x) + str(y))
-    def onCloseEvent(self, func, args:list=None, defaultArgs=False, disableArgs=False):
+    def onCloseEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
         def after(e):
             if not e["setCanceled"]:
                 self.destroy()
-        runnable = _EventHandler.registerNewCustomEvent(self, func, args, defaultArgs=defaultArgs, disableArgs=disableArgs, after=after)
+        runnable = EventHandler._registerNewCustomEvent(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, after=after)
         self["master"].protocol("WM_DELETE_WINDOW", runnable)
         return runnable
     def setBg(self, col):
@@ -648,7 +740,7 @@ class Tk:
     def quitMainLoop(self):
         self["master"].quit()
     def mainloop(self):
-        #self._finishLastTasks()
+        self._finishLastTasks()
         self["isRunning"] = True
         self["master"].mainloop()
         self["isRunning"] = False
@@ -677,8 +769,7 @@ class Tk:
             widget["alive"] = True
     def _onResize(self, e):
         for widget in list(self["dynamicWidgets"].values()):
-            if widget["alive"]:
-                self._updateDynamicSize(widget)
+            if widget["alive"]: self._updateDynamicSize(widget)
     def _resisterOnResize(self, widget):
         self["dynamicWidgets"][widget["id"]] = widget
     def _unregisterOnResize(self, widget):
@@ -701,7 +792,7 @@ class Tk:
             self["privateOldWinSize"] = _size
             return _size
     def _finishLastTasks(self):
-        _EventHandler.registerNewEvent(self, self._onResize, EventType.key("<Configure>"), [], decryptValueFunc=self._privateDecryptWindowResize)
+        EventHandler._registerNewEvent(self, self._onResize, EventType.key("<Configure>"), args=[], priority=1, decryptValueFunc=self._privateDecryptWindowResize)
         self._onResize("")
     @staticmethod
     def _getAllChildWidgets(widget):
@@ -738,7 +829,6 @@ class TkToplevel(Tk):
     def __init__(self, _master):
         if isinstance(_master, Tk):
             self.data = {"master": _tk_.Toplevel(_master._get()), "childWidgets":{}, "hasMenu":False, "widgets":[], "id":"".join([str(r.randint(0,9)) for _ in range(15)])}
-            _EventHandler._Events[self.data["id"]] = []
         elif isinstance(_master, TkToplevel):
             self.data = _master.data
         else:
@@ -754,8 +844,7 @@ class Widget:
         else:
             data["tkMaster"] = data["master"] if isinstance(data["master"], Tk) else data["master"]["tkMaster"]
             id = "".join([str(r.randint(0,9)) for _ in range(15)])
-            _EventHandler._Events[id] = []
-            self.data = {**data, **{"widgetProperties":{},"childWidgets":{}, "id":id, "alive":True, "destroyed":False}}
+            self.data = {**data, **{"widgetProperties":{},"childWidgets":{}, "id":id, "alive":True, "destroyed":False, "registry":_EventRegistry(self)}}
             self.data["master"]["childWidgets"][self["id"]] = ins
             if list(data.keys()).__contains__("init"):
                 for key, value in zip(data["init"].keys(), data["init"].values()):
@@ -775,7 +864,7 @@ class Widget:
     def _setId(self, id_:str): #@TODO: why? maby error with event??
         self["id"] = str(id_)
     def unbind(self, event:Union[EventType, Key, Mouse]):
-        _EventHandler.unregisterEventFormID(self["id"], event)
+        self["registry"].unregisterType(event)
     def setStyle(self, style:Style):
         self._setAttribute("relief", style.value if hasattr(style, "value") else style)
         return self
@@ -793,8 +882,8 @@ class Widget:
             self["widget"].lift(widg._get())
         else:
             self["widget"].lift()
-    def bind(self, func, event:Union[EventType, Key, Mouse], args:list=None, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self._ins, func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def bind(self, func, event:Union[EventType, Key, Mouse], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self._ins, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
     def canTakeFocusByTab(self, b:bool=False):
         self._setAttribute("takefocus", int(b))
         return self
@@ -875,7 +964,7 @@ class Widget:
         return self
     def destroy(self):
         assert not self["destroyed"], "Widget is already destroyed!"
-        _EventHandler.unregisterAllEventsFormID(self["id"])
+        self["registry"].unregisterAll()
         self["tkMaster"]._unregisterOnResize(self)
         del self["master"]["childWidgets"][self["id"]]
         self["widget"].destroy()
@@ -925,8 +1014,8 @@ class Calendar(Widget):
         return self
     def getValue(self):
         return self["widget"].get_date()
-    def onCalendarSelectEvent(self, func, args: list = None, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func,EventType.customEvent("<<CalendarSelected>>"), args, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onCalendarSelectEvent(self, func, args:list = None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, EventType.customEvent("<<CalendarSelected>>"), args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
 class DropdownCalendar(Widget):
     def __init__(self, _master, autoPlace=True):
         import tkcalendar as cal
@@ -954,8 +1043,8 @@ class DropdownCalendar(Widget):
         return self
     def getValue(self):
         return self["widget"].get_date()
-    def onCalendarSelectEvent(self, func, args: list = None, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func,EventType.customEvent("<<DateEntrySelected>>"), args, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onCalendarSelectEvent(self, func, args:list = None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, EventType.customEvent("<<DateEntrySelected>>"), args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
 class ScrollBar(Widget):
     def __init__(self, _master, autoPlace=True):
         if isinstance(_master, dict):
@@ -967,12 +1056,12 @@ class ScrollBar(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
         super().__init__(self, self.data)
-    def callEventOnReleaseScrollbar(self):
+    def callEventOnScrollbarRelease(self):
         self._setAttribute("jump", 1)
     def callEventOnScroll(self):
         self._setAttribute("jump", 0)
-    def onScrollEvent(self, func, args: list = None, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewCommand(self, func, args, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onScrollEvent(self, func, args:list = None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewCommand(self, func, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
     def _decryptEvent(self, args):
         print(args)
         return None
@@ -992,10 +1081,10 @@ class Frame(Widget):
     def destroy(self):
         assert self["alive"], "Widget is already destroyed!"
         for id, widg in zip(self["childWidgets"].keys(), self["childWidgets"].values()):
-            _EventHandler.unregisterAllEventsFormID(widg["id"])
+            #EventHandler.unregisterAllEventsFormID(widg["id"])
             self["tkMaster"]._unregisterOnResize(widg)
         del self["master"]["childWidgets"][self["id"]]
-        _EventHandler.unregisterAllEventsFormID(self["id"])
+        self["registry"].unregisterAll()
         self["tkMaster"]._unregisterOnResize(self)
         self["widget"].destroy()
         self["alive"] = False
@@ -1010,13 +1099,13 @@ class LabelFrame(Widget):
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self.data)
 class Label(Widget):
-    def __init__(self, _master, text=""):
+    def __init__(self, _master, **kwargs):
         if isinstance(_master, dict):
             self.data = _master
         elif isinstance(_master, self.__class__):
             self.data = _master.data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master":_master,  "text":text, "widget":_tk_.Label(_master._get()), "init":{"text":text}}
+            self.data = {"master":_master,  "widget":_tk_.Label(_master._get()), "init":kwargs}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+" or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self.data)
@@ -1044,8 +1133,8 @@ class Checkbutton(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self.data)
-    def onSelectEvent(self, func, args: list = None, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewCommand(self, func, args, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onSelectEvent(self, func, args:list = None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewCommand(self, func, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
     def _decryptEvent(self, e):
         return self.getState()
@@ -1074,12 +1163,13 @@ class Radiobutton:
     def createNewRadioButton(self):
         rb =_RadioButton(self.data["master"], self.data["intVar"])
         self.data["widgets"].append(rb)
-        for i in self.data["eventArgs"]: _EventHandler.registerNewCommand(rb, i["func"], i["args"], decryptValueFunc=rb._decryptEvent, defaultArgs=i["defaultArgs"], disableArgs=i["disableArgs"])
+        for i in self.data["eventArgs"]:
+            EventHandler._registerNewCommand(rb, i["func"], i["args"], i["priority"], decryptValueFunc=rb._decryptEvent, defaultArgs=i["defaultArgs"], disableArgs=i["disableArgs"])
         return rb
-    def onSelectEvent(self, func, args:list=None, defaultArgs=False, disableArgs=False):
-        self.data["eventArgs"].append({"func":func, "args":args , "defaultArgs":defaultArgs, "disableArgs":disableArgs})
+    def onSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        self.data["eventArgs"].append({"func":func, "args":args , "priority":priority, "defaultArgs":defaultArgs, "disableArgs":disableArgs})
         for btn in self.data["widgets"]:
-            _EventHandler.registerNewCommand(btn, func, args, decryptValueFunc=btn._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+            EventHandler._registerNewCommand(btn, func, args, priority, decryptValueFunc=btn._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
 class _RadioButton(Widget):
     def __init__(self, _master, intVar):
         self.data = {"master": _master, "widget": _tk_.Radiobutton(_master._get()), "intvar": intVar, "init": {"variable": intVar._get(), "value": intVar._add()}}
@@ -1118,7 +1208,7 @@ class Button(Widget):
     def triggerButtonPress(self, normalRelief=True):
         if normalRelief: self.setStyle(Style.SUNKEN)
         self.update()
-        _EventHandler.triggerEventByID(self["id"])
+        self["registry"].getHandler("cmd")()
         if normalRelief: self.setStyle(Style.RAISED)
         self.update()
     def setStyleOnHover(self, style:Style):
@@ -1128,12 +1218,12 @@ class Button(Widget):
         self["widget"].flash()
         #changes serveral times between selected and bg color
         return self
-    def setCommand(self, cmd, args:list=None, disableArgs=False, defaultArgs=False):
-        runnable = _EventHandler.registerNewCommand(self, cmd, args, disableArgs=disableArgs, defaultArgs=defaultArgs, onlyGetRunnable=self["instanceOfMenu"])
+    def setCommand(self, cmd, args:list=None, priority:int=0, disableArgs=False, defaultArgs=False):
+        runnable = EventHandler._registerNewCommand(self, cmd, args, priority, disableArgs=disableArgs, defaultArgs=defaultArgs, onlyGetRunnable=self["instanceOfMenu"])
         if self["instanceOfMenu"]:
             self["widgetProperties"]["command"] = runnable
         elif self["canBePressedByReturn"]:
-            _EventHandler.registerNewEvent(self, cmd, EventType.key(Key.RETURN) , args, disableArgs=disableArgs, defaultArgs=defaultArgs)
+            EventHandler._registerNewEvent(self, cmd, EventType.key(Key.RETURN), args, priority=1, disableArgs=disableArgs, defaultArgs=defaultArgs)
         return self
     def addImage(self, img:Union[TkImage, PILImage]):
         self["widget"]._image = img._get()
@@ -1156,8 +1246,8 @@ class OnOffButton(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self.data)
-    def setCommand(self, cmd, args:list=None, disableArgs=False, defaultArgs=False):
-        _EventHandler.registerNewCommand(self, cmd, args,disableArgs=disableArgs, defaultArgs=defaultArgs, decryptValueFunc=self._decryptEvent)
+    def setCommand(self, cmd, args:list=None, priority:int=0, disableArgs=False, defaultArgs=False):
+        EventHandler._registerNewCommand(self, cmd, args, priority, disableArgs=disableArgs, defaultArgs=defaultArgs, decryptValueFunc=self._decryptEvent)
         return self
     def _decryptEvent(self, args):
         self["value"] = not self["value"]
@@ -1200,8 +1290,8 @@ class Entry(Widget):
         self._setAttribute("selectforeground", c.value if hasattr(c, "value") else c)
     def setSelectBackGroundColor(self, c:Color):
         self._setAttribute("selectbackground", c.value if hasattr(c, "value") else c)
-    def onUserInputEvent(self, func, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func, EventType.KEY_UP, [], decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
         #_EventHandler.registerNewValidateCommand(self, func, [], "all", decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
     def hideCharactersWith(self, i:str="*"):
@@ -1244,8 +1334,8 @@ class TextEntry(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self.data)
-    def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
     def getValue(self):
         return self.getEntry().getValue()
@@ -1282,8 +1372,8 @@ class TextDropdownMenu(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self.data)
-    def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
     def getValue(self):
         return self.getDropdownMenu().getValue()
@@ -1377,8 +1467,8 @@ class Listbox(Widget):
         return [i for i in range(self.length())]
     def getAllSlots(self):
         return [self["widget"].get(i) for i in range(self.length())]
-    def onSelectEvent(self, func, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func, EventType.LISTBOX_SELECT, [], defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+    def onSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, EventType.LISTBOX_SELECT, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
     def _decryptEvent(self, args):
         try:
             w = args.widget
@@ -1430,8 +1520,8 @@ class Scale(Widget):
     def setSteps(self, s:int=1):
         self._setAttribute("resolution", s)
         return self
-    def onScroll(self, func):
-        _EventHandler.registerNewCommand(self, func, args=None, decryptValueFunc=self._decryptValue)
+    def onScroll(self, func, args:list=None, priority:int=0):
+        EventHandler._registerNewCommand(self, func, args, priority, decryptValueFunc=self._decryptValue)
         return self
     def _decryptValue(self, a=None):
         return self.getValue()
@@ -1554,8 +1644,8 @@ class Text(Widget):
         return self
     def getSelectedText(self):
         return self["widget"].get("sel.first", "sel.last")
-    def onUserInputEvent(self, func, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func,EventType.KEY_UP, [], decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
         #_EventHandler.registerNewValidateCommand(self, func, [], "all", decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
     def setSelectForeGroundColor(self, c:Color):
         self._setAttribute("selectforeground", c.value if hasattr(c, "value") else c)
@@ -1591,8 +1681,8 @@ class TreeView(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self.data)
-    def onSelectEvent(self, func, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func, Mouse.DOUBBLE_LEFT, [], defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+    def onSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, Mouse.DOUBBLE_LEFT, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
     def _decryptEvent(self, args):
         id_ = self["widget"].selection()[0]
         if id_ == "": return None
@@ -1667,10 +1757,10 @@ class SpinBox(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
         super().__init__(self, self.data)
-    def onButtonClick(self, func, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewCommand(self, func, [], defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
-    def onUserInputEvent(self, func, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func, EventType.KEY_UP, [], decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onButtonClick(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewCommand(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+    def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
     def setValue(self, v, clearFirst=True):
         disableAfterWrite = False
         if self["readonly"]:
@@ -1735,12 +1825,12 @@ class DropdownMenu(Widget):
             self._setAttribute("state", "readonly")
         else:
             self._setAttribute("state", "normal")
-    def onSelectEvent(self, func, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewEvent(self, func,  EventType.COMBOBOX_SELECT, [], defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
-    def onDropdownExpand(self, func, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewCommand(self, func, [], defaultArgs=defaultArgs, disableArgs=disableArgs, cmd="postcommand")
-    def onUserInputEvent(self, func, defaultArgs=False, disableArgs=False):
-        _EventHandler.registerNewValidateCommand(self, func, [], "all", decryptValueFunc=self._decryptEvent2, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewEvent(self, func, EventType.COMBOBOX_SELECT, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+    def onDropdownExpand(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewCommand(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, cmd="postcommand")
+    def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        EventHandler._registerNewValidateCommand(self, func, args, priority, "all", decryptValueFunc=self._decryptEvent2, defaultArgs=defaultArgs, disableArgs=disableArgs)
     def setValueByIndex(self, i:int):
         disableAfterWrite = False
         if self["readonly"]:
@@ -1853,7 +1943,7 @@ class ContextMenu(Widget):
             self.data = _master.data
         elif hasattr(_master, "_get"):
             self.data = {"master": _master,  "widget": _tk_.Menu(_master._get(), tearoff=0), "subMenu":[], "closable":closable, "eventType":eventType}
-            if eventType is not None: _EventHandler.registerNewEvent(_master, self.open,  eventType, [], decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
+            if eventType is not None: EventHandler._registerNewEvent(_master, self.open, eventType, [], 1, decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self.data)
@@ -1863,7 +1953,7 @@ class ContextMenu(Widget):
         self["subMenu"].append(m)
         return m
     def bindToWidget(self, widg):
-        _EventHandler.registerNewEvent(widg, self.open,  self["eventType"], [], decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
+        EventHandler._registerNewEvent(widg, self.open, self["eventType"], [], 1, decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
     def open(self, loc:Location2D):
         if hasattr(loc, "getValue"):
             loc = Location2D(loc.getValue())
@@ -1899,7 +1989,7 @@ class NotebookTab(Widget):
     def getTabName(self):
         return self["tabWidget"]._get().tab(self["tabId"], "text")
     def setTabName(self, text):
-        self["tabWidget"]._get().tab(self["tabId"], text=text(text))
+        self["tabWidget"]._get().tab(self["tabId"], text=text)
         return self
     def setSelected(self):
         self["tabWidget"]._get().select(self["tabId"])
@@ -1909,9 +1999,9 @@ class NotebookTab(Widget):
     def destroy(self):
         assert self["alive"], "Widget is already destroyed!"
         for id, widg in zip(self["childWidgets"].keys(), self["childWidgets"].values()):
-            _EventHandler.unregisterAllEventsFormID(widg["id"])
+            widg["registry"].unregisterAll()
             self["tkMaster"]._unregisterOnResize(widg)
-        _EventHandler.unregisterAllEventsFormID(self["id"])
+        self["registry"].unregisterAll()
         self["tabWidget"]["tabIndexList"].remove(self)
         self["tkMaster"]._unregisterOnResize(self)
         self["widget"].destroy()
@@ -1938,8 +2028,8 @@ class Notebook(Widget):
         super().__init__(self, self.data)
     def _init(self):
         self.onTabSelectEvent(self._updateTab)
-    def onTabSelectEvent(self, func, args:list=None, disableArgs=False, defaultArgs=False):
-        _EventHandler.registerNewEvent(self, func, EventType.customEvent("<<NotebookTabChanged>>"), args, decryptValueFunc=self._decryptEvent, disableArgs=disableArgs, defaultArgs=defaultArgs)
+    def onTabSelectEvent(self, func, args:list=None, priority:int=0, disableArgs=False, defaultArgs=False):
+        EventHandler._registerNewEvent(self, func, EventType.customEvent("<<NotebookTabChanged>>"), args, priority, decryptValueFunc=self._decryptEvent, disableArgs=disableArgs, defaultArgs=defaultArgs)
     def setCtrlTabEnabled(self):
         self["widget"].enable_traversal()
         return self
@@ -1989,8 +2079,8 @@ class Notebook(Widget):
                 ]
             })
         ])
-    def onCloseEvent(self, func, defaultArgs=False, disableArgs=False, getIdInsteadOfName=False):
-        runnable = _EventHandler.registerNewCustomEvent(self, func, [], decryptValueFunc=self._decryptValueID if getIdInsteadOfName else self._decryptValueNAME, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onCloseEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False, getIdInsteadOfName=False):
+        runnable = EventHandler._registerNewCustomEvent(self, func, args, priority, decryptValueFunc=self._decryptValueID if getIdInsteadOfName else self._decryptValueNAME, defaultArgs=defaultArgs, disableArgs=disableArgs)
         self["runnable"] = runnable
     def _decryptValueID(self, e):
         return self._active
@@ -2040,22 +2130,20 @@ class Canvas(Widget):
     def clear(self):
         for i in list(self["canObjs"].values()).copy():
             i.destroy()
-
 class CanvasObject:
     def __init__(self, _ins, data):
         self._ins = _ins
         self.data = data
         if not list(self.data.keys()).__contains__("id"):
             self.data["id"] = "".join([str(r.randint(0,9)) for _ in range(15)])
-            _EventHandler._Events[self.data["id"]] = []
             self.data["master"]["canObjs"][self._ins["id"]] = self._ins
     def __getitem__(self, item):
         return self.data[item]
     def __setitem__(self, key, value):
         self.data[key] = value
-    def bind(self, func, event: Union[EventType, Key, Mouse], args: list = None, defaultArgs=False, disableArgs=False):
-        #assert self["objID"] is None, "Render canvasOnj before binding!"
-        _EventHandler.registerNewTagBind(self, self["objID"], func, event, args, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        assert self["objID"] is not None, "Render canvasObj before binding!"
+        EventHandler._registerNewTagBind(self, self["objID"], func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
     def render(self):
         self.destroy()
         if "loc2" not in list(self.data.keys()):
@@ -2090,7 +2178,7 @@ class CanvasObject:
         return self._ins.__class__(data)
     def destroy(self):
         if self.data["objID"] is not None and self._ins["id"] in self["master"]["canObjs"]:
-            _EventHandler.unregisterAllEventsFormID(self["id"])
+            self["registry"].unregisterAll()
             self["master"]["canObjs"].pop(self._ins["id"])
             self["master"]._get().delete(self["objID"])
             self["objID"] = None
@@ -2263,4 +2351,21 @@ class ColorChooser:
 
 
 if __name__ == '__main__':
-    print(ColorChooser.askColor().getRGB())
+
+    def trig():
+        master.update()
+        btn.triggerButtonPress()
+
+    def m(e):
+        print("t", 1)
+        t.sleep(0.5)
+    def f(e):
+        print("f", 2)
+        t.sleep(0.5)
+
+    master = Tk()
+    btn = Button(master).setText("TEST").place(0, 0)
+    btn.setCommand(m)
+    btn.setCommand(f)
+    master.runDelayLoop(trig, 1)
+    master.mainloop()
