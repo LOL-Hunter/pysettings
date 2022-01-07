@@ -22,8 +22,10 @@ class _JsonConfig:
         return self
     def getData(self):
         return self.data
+    def getPrettifyData(self):
+        return json.dumps(self.data, indent=4)
     def setData(self, d):
-        if isinstance(d, dict):
+        if isinstance(d, dict) or isinstance(d, list):
             self.data = d.copy()
         else:
             self.data = d.data
@@ -47,30 +49,36 @@ class JsonConfig:
                 file.write("{}")
                 file.close()
             else: raise FileExistsError("Config file does not exists.: "+path)
-        file = open(path, "r")
-        text=""
+        file = open(path, "rb")
+        text=b""
         for line in file:
             text+=line
         file.close()
 
         try:
-            data = json.loads(text.replace("\n", "").replace("'", "\"").replace("(", "[").replace(")", "]"))
+            data = json.loads(text.replace(b"\n", b"").replace(b"(", b"[").replace(b")", b"]").replace(b"'", b"\""))
         except json.JSONDecodeError as e:
             line = e.lineno
             col = e.colno
             pos = e.pos
-            textLine = text.split("\n")[line-1]
+            textLine = text.split(b"\n")[line-1]
 
             if len(textLine)-pos > 10:
                 to_ = pos+10
+                dots = True
             else:
-                to_ = pos - len(textLine)
+                to_ = len(textLine)
+                dots = False
 
             if pos >= 10:
+                _dots = True
                 from_ = pos-10
             else:
+                _dots = False
                 from_ = 0
-            err = "\nThis ConfigFile is corrupted or not readable!\n\nFile: "+path+"\nLine:"+str(line-1)+"\nchar:"+str(pos)+"\nException type: "+str(e.msg)+"\n\nInvalid Syntax Here:\n"+("..." if from_ > 0 else "")+textLine[from_:to_]+"...\n"+" "*((pos+2) if from_ > 0 else pos-1)+"^"
+            err = "\nThis ConfigFile is corrupted or not readable!\n\nFile: "+path+"\nLine: "+str(line-1)+"\nchar: "+str(pos)+"\nException type: "+str(e.msg)+"\n\nInvalid Syntax Here:\n"+("..." if _dots > 0 else "")+textLine[from_:to_].decode()+("...\n"if dots else "\n")
+            err += " "*((pos-from_) if not _dots else (pos-from_+3))+"^"
+            #" "*((pos+2) if from_ > 0 else pos-1)+"^"
             raise Exception(err)
         return _JsonConfig(data, path)
 
