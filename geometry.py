@@ -2,23 +2,28 @@
 class _Errors:
     class NoneTypeLocationError(Exception):
         pass
+    class LocationConvertError(Exception):pass
 
 class Location2D:
     def __init__(self, *args, **kwargs):
+        self.copy = self.clone
         if len(args) == 0 and len(kwargs.values()) == 0:
             self._coords = {"x":0, "y":0}
         elif len(args) == 0:
             self._coords = kwargs
         else:
-            if len(args) != 1:
+            if len(args) == 2:
                 self._coords = {"x":args[0], "y":args[1]}
             else:
-                if isinstance(args[0], Location2D):
-                    self._coords = args[0]._coords
-                elif args[0] is None:
+                args = args[0]
+                if isinstance(args, Location2D):
+                    self._coords = args._coords.copy()
+                elif args is None:
                     raise _Errors.NoneTypeLocationError("Location is None.")
+                elif type(args) == tuple and len(args) > 1:
+                    self._coords = {"x": args[0], "y": args[1]} # ((1, 2), )
                 else:
-                    self._coords = {"x": args[0][0], "y": args[0][1]}
+                    raise _Errors.LocationConvertError("Cold not convert to Location:\n\t"+"Type: "+str(type(args))+"\n\tStr: "+str(args))
     def __getitem__(self, item):
         return self._coords[item]
     def __setitem__(self, key, value):
@@ -39,6 +44,10 @@ class Location2D:
             return True
     def __repr__(self):
         return "Location2D("+str(self["x"])+", "+str(self["y"])+")"
+    def toInt(self):
+        self._coords["x"] = int(self._coords["x"])
+        self._coords["y"] = int(self._coords["y"])
+        return self
     def getX(self):
         return self._coords["x"]
     def getY(self):
@@ -50,6 +59,7 @@ class Location2D:
         self._coords["y"] = y
         return self
     def change(self, x=0.0, y=0.0):
+        if isinstance(x, Location2D): x, y = x.get()
         self._coords["x"] = self.getX() + x
         self._coords["y"] = self.getY() + y
         return self
@@ -73,6 +83,7 @@ class Location2D:
             return str(self.getX()) + str(self.getY())
 class Location3D:
     def __init__(self, *args, **kwargs):
+        self.copy = self.clone
         if len(args) == 0 and len(kwargs.values()) == 0:
             self._coords = {"x":0, "y":0, "z":0}
         elif len(args) == 0:
@@ -82,13 +93,12 @@ class Location3D:
                 self._coords = {"x":args[0], "y":args[1], "z":args[2]}
             else:
                 if isinstance(args[0], Location3D):
-                    self._coords = args[0]._coords
+                    self._coords = args[0]._coords.copy()
                 elif args[0] is None:
                     raise _Errors.NoneTypeLocationError("None Type Location3D")
                 else:
                     self._coords = {"x": args[0][0], "y": args[0][1], "z": args[0][2]}
     def __getitem__(self, item):
-        print(self._coords, item)
         return self._coords[item]
     def __setitem__(self, key, value):
         self._coords[key] = value
@@ -103,7 +113,7 @@ class Location3D:
         elif isinstance(other, tuple):
             return other != self.get()
     def __repr__(self):
-        return "Location2D("+str(self["x"])+str(self["y"])+str(self["z"])+")"
+        return "Location2D("+str(self["x"])+", "+str(self["y"])+", "+str(self["z"])+")"
     def toInt(self):
         self._coords["x"] = int(round(self.getX()))
         self._coords["y"] = int(round(self.getY()))
@@ -125,6 +135,7 @@ class Location3D:
         self._coords["z"] = z
         return self
     def change(self, x=0.0, y=0.0, z=0.0):
+        if isinstance(x, Location3D): x, y, z = x.get()
         self._coords["x"] = self.getX() + x
         self._coords["y"] = self.getY() + y
         self._coords["z"] = self.getZ() + z
@@ -151,6 +162,7 @@ class Location3D:
             return str(self.getX()) + str(self.getY()) + str(self.getZ())
 class Rect:
     def __init__(self, loc1, loc2):
+        self.ratio = None
         self.loc1 = loc1
         self.loc2 = loc2
     @staticmethod
@@ -161,6 +173,10 @@ class Rect:
         return Rect(loc, loc.clone().change(x=width, y=height))
     def __repr__(self):
         return "Rect("+str(self.loc1)+", "+str(self.loc2)+")"
+    def clone(self):
+        return Rect(self.loc1.clone(), self.loc2.clone())
+    def getLoc1(self):
+        return Location2D(min(self.loc1.getX(), self.loc2.getX()),  min(self.loc1.getY(), self.loc2.getY()))
     def getWidth(self):
         return max(self.loc1.getX(), self.loc2.getX()) - min(self.loc1.getX(), self.loc2.getX())
     def getHeight(self):
@@ -170,6 +186,19 @@ class Rect:
     def collisionWithRect(self, rect):
         rect2 = Rect(Location2D(rect.loc1.getX()-self.getWidth(), rect.loc1.getY()-self.getHeight()), Location2D(rect.loc1.getX()+rect.getWidth(), rect.loc1.getY()+rect.getHeight()))
         return rect2.collisionWithPoint(self.loc1)
+    def resizeToRectWithRatio(self, rect, offset=0, updateRatio=False, upLeftFix=True):
+        if updateRatio or self.ratio is None:
+            self.ratio = self.getWidth()/self.getHeight()
+        newWidth = rect.getWidth()-offset*2
+        newHeight = (1/self.ratio) * newWidth
+        if newHeight + offset*2 > rect.getHeight():
+            newHeight = rect.getHeight() - offset*2
+            newWidth = self.ratio * newHeight
+        if upLeftFix:
+            self.loc2 = Location2D(self.loc1.getX()+newWidth, self.loc1.getY()+newHeight)
+        else:
+            self.loc1 = Location2D(rect.loc1.getX()+offset, rect.loc1.getY()+offset)
+            self.loc2 = Location2D(rect.loc1.getX()+newWidth, rect.loc1.getY()+newHeight)
 
 def _map(value, iMin, iMax, oMin=None, oMax=None):
     if oMin is None and oMax is None:
@@ -181,9 +210,3 @@ def _map(value, iMin, iMax, oMin=None, oMax=None):
 
 if __name__ == "__main__":
     print(_map(10, 100, 1000))
-
-
-
-
-
-
