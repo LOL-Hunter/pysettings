@@ -1,4 +1,5 @@
-from pysettings import tk
+from pysettings.tk import _tk_, ttk
+import pysettings.tk as tk
 
 class DataVirtualizer(tk.Widget):
     def __init__(self, _master, autoRender=True):
@@ -71,25 +72,153 @@ class DataVirtualizer(tk.Widget):
         self["widget"].place(x=x, y=y, width=width, height=height, anchor=anchor)
         self["alive"] = True
         return self
+class TestWidget(tk.Widget):
+    def __init__(self, _master):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, tk.Tk) or isinstance(_master, tk.Frame) or isinstance(_master, tk.LabelFrame):
+            self.data = {"master": _master, "widget": tk._tk_.LabelFrame(_master._get())}
+        else:
+            raise tk.TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
+        super().__init__(self, self.data)
+    def loadStyle(self):
+        style = ttk.Style()
+        self.images = (
+            _tk_.PhotoImage("img_close",
+                            data="R0lGODlhCAAIAMIBAAAAADs7O4+Pj9nZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
+            _tk_.PhotoImage("img_closeactive",
+                            data="R0lGODlhCAAIAMIEAAAAAP/SAP/bNNnZ2cbGxsbGxsbGxsbGxiH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
+            _tk_.PhotoImage("img_closepressed",
+                            data="R0lGODlhCAAIAMIEAAAAAOUqKv9mZtnZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs=")
+        )
+
+        style.element_create(
+            "close", "image", "img_close",
+            ("active", "pressed", "!disabled", "img_closepressed"),
+            ("active", "!disabled", "img_closeactive"),
+            border=8,
+            sticky=''
+                             )
+        style.layout("CustomNotebook", [("CustomNotebook.client", {"sticky": "nswe"})])
+        style.layout("CustomNotebook.Tab", [
+            ("CustomNotebook.tab", {
+                "sticky": "nswe",
+                "children": [
+                    ("CustomNotebook.padding", {
+                        "side": "top",
+                        "sticky": "nswe",
+                        "children": [
+                            ("CustomNotebook.focus", {
+                                "side": "top",
+                                "sticky": "nswe",
+                                "children": [
+                                    ("CustomNotebook.label", {"side": "left", "sticky": ''}),
+                                    ("CustomNotebook.close", {"side": "left", "sticky": ''}),
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            })
+        ])
+class CompleterEntry(tk.Entry):
+    def __init__(self, _master):
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, tk.Tk) or isinstance(_master, tk.Frame) or isinstance(_master, tk.LabelFrame):
+            data = {"master":_master, "widget":_tk_.Entry(_master._get())}
+            super().__init__(_master)
+            self._addData(data)
+
+            self._listBox = tk.Listbox(_master)
+            self._listBox.onSelectEvent(self._setEntryText)
+            self._rect = None
 
 
+        else:
+            raise tk.TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
+
+    def _up(self, e):
+        pass
+    def _down(self, e):
+        pass
 
 
-if __name__ == '__main__':
-    from random import randint
-    from time import sleep
+    def _setEntryText(self, e):
+        self.addText(e.getValue())
+
+    def _updateMenu(self, e, out):
+        if out is None or self._rect is None or out == []:
+            self._listBox.placeForget()
+            return
+        self._listBox.place(self._rect)
+        self._listBox.clear()
+        self._listBox.addAll(out)
 
 
+    def _decryptEvent(self, args):
+        return args
+
+    def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        event = tk.EventHandler._registerNewEvent(self, func, tk.EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        event["afterTriggered"] = self._updateMenu
+
+    def place(self, x=None, y=None, width=None, height=None, anchor:tk.Anchor=tk.Anchor.UP_LEFT):
+        assert not self["destroyed"], "The widget has been destroyed and can no longer be placed."
+        if x is None: x = 0
+        if y is None: y = 0
+        if hasattr(anchor, "value"):
+            anchor = anchor.value
+        if isinstance(x, tk.Location2D):
+            x, y = x.get()
+        if isinstance(x, tk.Rect):
+            width = x.getWidth()
+            height = x.getHeight()
+            x, y, = x.getLoc1().get()
+        x = int(round(x, 0))
+        y = int(round(y, 0))
+        self.placeForget()
+        self._rect = tk.Rect.fromLocWidthHeight(tk.Location2D(x, y + height), width, 200)
+        self["widget"].place(x=x, y=y, width=width, height=height, anchor=anchor)
+        self["alive"] = True
+        return self
+if __name__ == "__main__":
+    import os
     master = tk.Tk()
-    master.setWindowSize(1000, 800)
-    sc = tk.ScrollBar(master)
 
-    sc.place(0, 0, 100)
 
-    vit = DataVirtualizer(master)
-    #vit.place(0, 0, 1000, 800)
-    #for i in range(0, 1000):
-       #vit.addValues(randint(0, 1000))
+
+    def onComplete(e):
+
+        val = ce.getValue()
+        if val == "":
+            return os.popen("fsutil fsinfo drives").read().replace("\n", "").strip(" ").split(" ")[1:]
+        if not val.startswith("C:\\"):
+            ce.setValue("C:\\")
+        print("splitted Val", os.path.split(val)[0])
+        if not os.path.exists(os.path.split(val)[0]):
+            print("path does not exist: ", val)
+            return []
+        a = []
+        for i in os.listdir(os.path.split(val)[0]):
+            c = os.path.split(val)[0] + "\\" + i
+            print(c, val)
+            if c.startswith(val):
+                a.append(i)
+        print(a)
+        return a
+
+
+    master.setWindowSize(500, 500)
+
+
+    ce = CompleterEntry(master)
+
+    ce.onUserInputEvent(onComplete)
+
+
+    ce.place(0, 0, 250, 20)
 
 
     master.mainloop()
+

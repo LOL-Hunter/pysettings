@@ -7,6 +7,24 @@ from enum import Enum
 import os
 co.init(autoreset=True)
 
+class Log:
+    _configActive = False
+    _path = ""
+    _config = None
+    @staticmethod
+    def logMsg(path):
+        # could be that the file doesn't exists
+        _config = open(path, "a")
+        Log._configActive = True
+
+    @staticmethod
+    def save():
+        Log._config.close()
+
+    @staticmethod
+    def _write(msg):
+        if Log._configActive:
+            Log._config.write(msg+"\n")
 class Color(Enum):
     GREY = "grey"
     RED = "red"
@@ -17,17 +35,62 @@ class Color(Enum):
     CYAN = "cyan"
     WHITE = "white"
     BLACK = None
-
-
 class TextColor:
+
+    @staticmethod
+    def _strf(text):
+        """
+                §D: DEFAULT
+                §W: WHITE
+                §B: BLACK
+
+                §r: RED
+                §g: GREEN
+                §b: BLUE
+                §c: CYAN
+                §y: YELLOW
+                §m: MAGENTA
+
+                @param text:
+                @return:
+                """
+
+        colors = {'§W':Color.WHITE,
+                  '§B':Color.BLACK,
+                  '§INFO':"info",
+                  '§r':Color.RED,
+                  '§g':Color.GREEN,
+                  '§b':Color.BLUE,
+                  '§c':Color.CYAN,
+                  '§y':Color.YELLOW,
+                  '§m':Color.MAGENTA}
+        __text = ""
+        text = text.replace("§INFO", t.strftime("§g[INFO-%H:%M:%S]: "))
+        text = text.replace("§ERROR", t.strftime("§r[ERROR-%H:%M:%S]: "))
+        text = text.replace("§WARN", t.strftime("§y[WARNING-%H:%M:%S]: "))
+        for i, textSection in enumerate(text.split("§")[1:]):
+            color, subText = textSection[0], textSection[1:]
+            if "§"+color not in colors.keys():
+                continue
+            __text+=TextColor.get(subText, colors["§"+color])
+        return __text+TextColor.get("", Color.BLACK)
+
+
+
+    @staticmethod
+    def getStrf(text):
+        return TextColor._strf(text)
+    @staticmethod
+    def printStrf(text):
+        print(TextColor._strf(text))
     @staticmethod
     def get(text, col=Color.BLACK):
         if hasattr(col, "value"): col = col.value
         return c.colored(text, color=col)
     @staticmethod
-    def print(text, col=Color.BLACK):
+    def print(text, col=Color.BLACK, end=False):
         if hasattr(col, "value"): col = col.value
-        print(c.colored(text, color=col))
+        print(c.colored(text, color=col), end=("\n" if not end else ""))
 class Title:
     def __init__(self, font="big"):
         self._title = py.Figlet(font=font)
@@ -46,20 +109,29 @@ class Title:
         return self._title.renderText(text)
 class MsgText:
     @staticmethod
-    def info(msg):
-        TextColor().print(t.strftime("[INFO-%H:%M:%S]: ")+str(msg), Color.GREEN.value)
+    def info(msg, strf=False):
+        _text = t.strftime("[INFO-%H:%M:%S]: ")+str(msg)
+        Log._write(_text)
+        if not strf: TextColor.print(_text, Color.GREEN.value)
+        else: TextColor.printStrf("§g"+_text)
     @staticmethod
     def warning(msg):
-        TextColor().print(t.strftime("[WARNING-%H:%M:%S]: ")+str(msg), Color.YELLOW.value)
+        _text = t.strftime("[WARNING-%H:%M:%S]: ")+str(msg)
+        Log._write(_text)
+        TextColor.print(_text, Color.YELLOW.value)
     @staticmethod
     def help(msg):
-        TextColor().print("[HELP]: " + str(msg), Color.YELLOW.value)
+        TextColor.print("[HELP]: " + str(msg), Color.YELLOW.value)
     @staticmethod
     def error(msg, exit_=False):
-        TextColor().print(t.strftime("[ERROR-%H:%M:%S]: ") + str(msg), Color.RED.value)
-        if exit_: os._exit(0)
-        
-            
+        _text = t.strftime("[ERROR-%H:%M:%S]: ") + str(msg)
+        Log._write(_text)
+        TextColor.print(_text, Color.RED.value)
+        if exit_:
+            Log._write("="*5+"SystemExit by MsgText-error"+"="*5)
+            Log.save()
+            os._exit(0)
+
 
 if __name__ == '__main__':
-    Title().print("Test", Color.BLUE)
+    TextColor.printStrf("§rHallo§gWelt")
