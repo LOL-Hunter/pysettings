@@ -1,4 +1,4 @@
-
+#new
 class _Errors:
     class NoneTypeLocationError(Exception):
         pass
