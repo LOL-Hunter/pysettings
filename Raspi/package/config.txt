@@ -1,0 +1,7 @@
+{
+    "names": {
+        "f4:cf:a2:68:4f:70": "test1",
+        "dg": "hgj",
+        "fgh": "tzu"
+    }
+}
