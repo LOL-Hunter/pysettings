@@ -98,6 +98,13 @@ class JsonConfig:
             return data
         raise Exception(data)
     @staticmethod
+    def prettifyData(data: dict, ignoreErrors=False):
+        if isinstance(data, dict) or isinstance(data, list):
+            return str(json.dumps(data, indent=4))
+        if ignoreErrors:
+            return data
+        raise Exception(data)
+    @staticmethod
     def _decode(path, s:bytes, ignoreErrors):
         try:
             data = json.loads(s.replace(b"\n", b"").replace(b"(", b"[").replace(b")", b"]"))  # .replace(b"'", b"\""))
