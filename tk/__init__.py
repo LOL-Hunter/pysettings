@@ -88,6 +88,7 @@ makes a window with a single close-button (which is smaller than usual) on the r
 -topmost boolean
 makes sure the window always stays on top of all other windows
 """
+
 class TKExceptions:
     class InvalidFileExtention(Exception):
         pass
@@ -885,7 +886,7 @@ class Tk:
         self.quit = self.quitMainLoop
         self.withdraw = self.hide
         if _master is None:
-            self.data = {"master": _tk_.Tk(), "registry":_EventRegistry(self), "isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "setSize":(),  "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}, "closeRunnable":None, "title":""}
+            self.data = {"master": _tk_.Tk(), "registry":_EventRegistry(self), "placeRelData":{"handler":None}, "isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "setSize":(),  "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}, "closeRunnable":None, "title":""}
 
             #configure internal onCloseEvent
             self["master"].protocol("WM_DELETE_WINDOW", self._internalOnClose)
@@ -904,7 +905,8 @@ class Tk:
     def __setitem__(self, key, value):
         self.data[key] = value
     def __del__(self):
-        print("__DELETE__", type(self))
+        pass
+        #print("__DELETE__", type(self))
     def getType(self):
         return type(self)
     def runTask(self, func):
@@ -1020,13 +1022,13 @@ class Tk:
     def clearAllWidgets(self):
         for i in self["master"].winfo_children():
             i.destroy()
-    def centerWindowOnScreen(self):
+    def centerWindowOnScreen(self, forceSetSize=False):
         width, height = self.getWindowSize()
-        if width == 1:
+        if width == 1 or forceSetSize:
             if len(self["setSize"]) == 2:
                 width, height = self["setSize"]
-        else:
-            raise TKExceptions.InvalidUsageException("Run the mainloop first or specify a window size manually to center the Window!")
+            else:
+                raise TKExceptions.InvalidUsageException("Run the mainloop first or specify a window size manually to center the Window!")
         swidth , sheight = self.getScreenSize()
         nwidth = int(round((swidth/2-width/2), 0))
         nheight = int(round((sheight/2-height/2), 0))
@@ -1191,14 +1193,21 @@ class Tk:
             widget._get().update_idletasks()
             widget["placed"] = True
     def updateDynamicWidgets(self):
-        for widget in list(self["dynamicWidgets"].values()):
-            if not widget["destroyed"]: self._updateDynamicSize(widget)
+        #for widget in list(self["dynamicWidgets"].values())[::-1]: # place frames first
+        #    if not widget["destroyed"]: self._updateDynamicSize(widget)
+
+        relevantIDs = list(self["dynamicWidgets"].keys())
+        for widget in self._getAllChildWidgets(self):
+            if widget.getID() in relevantIDs:
+                if not widget["destroyed"]: self._updateDynamicSize(widget)
+
+
     def _internalOnClose(self):
         """
         internal onClose Event.
         @return:
         """
-        print("Internal Close")
+        #print("Internal Close")
         if self["closeRunnable"] is None:
             self.destroy()
         else:
@@ -1206,7 +1215,6 @@ class Tk:
             runnable()
             if not runnable.event["setCanceled"]:
                 self.destroy()
-
 
     def _registerOnResize(self, widget):
         self["dynamicWidgets"][widget["id"]] = widget
@@ -1311,7 +1319,7 @@ class Toplevel(Tk):
             # configure internal onCloseEvent
             self["master"].protocol("WM_DELETE_WINDOW", self._internalOnClose)
         elif isinstance(_master, str) and _master == "Tk":
-            self.data = {"master":_tk_.Tk(), "tkMaster":_master, "registry":_EventRegistry(self), "setSize":(),"isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1),"id":"".join([str(r.randint(0, 9)) for _ in range(15)]), "dynamicWidgets":{}, "title":"", "closeRunnable":None}
+            self.data = {"master":_tk_.Tk(), "tkMaster":_master, "placeRelData":{"handler":None}, "registry":_EventRegistry(self), "setSize":(),"isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1),"id":"".join([str(r.randint(0, 9)) for _ in range(15)]), "dynamicWidgets":{}, "title":"", "closeRunnable":None}
             EventHandler._registerNewEvent(self, self.updateDynamicWidgets, EventType.key("<Configure>"), args=[],priority=1, decryptValueFunc=self._privateDecryptWindowResize)
             # configure internal onCloseEvent
             self["master"].protocol("WM_DELETE_WINDOW", self._internalOnClose)
@@ -1573,7 +1581,8 @@ class Widget:
         for k, v in zip(kwargs.keys(), kwargs.values()):
             self._setAttribute(k, v)
         return self
-
+    def getTkMaster(self)->Tk | Toplevel:
+        return self["tkMaster"]
     def clearChildWidgets(self):
         """
         Clears the child-widgets.
@@ -1809,6 +1818,58 @@ class PDFViewer(Widget):
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
         super().__init__(self, self.data, group)
 
+class MatPlotLibFigure(Widget):
+    def __init__(self, _master, fig, group=None, toolBar=False):
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+        from matplotlib.backend_bases import key_press_handler
+        from matplotlib.figure import Figure
+        if isinstance(_master, dict):
+            self.data = _master
+        elif isinstance(_master, self.__class__):
+            self.data = _master.data
+        elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
+            master = _master
+            init = {}
+            if toolBar:
+                init = {"func":self._bind}
+                master = Frame(_master)
+                master.setBg("green")
+
+            figureWidget = FigureCanvasTkAgg(fig, master._get())
+            figureWidget.draw()
+
+            if toolBar:
+                toolbar = NavigationToolbar2Tk(figureWidget, master._get(), pack_toolbar=False)
+                toolbar.update()
+
+                self.wwidget_plot = Widget(None, {"master":master, "widget":figureWidget.get_tk_widget()}, None)
+                self.wwidget_settings = Widget(None, {"master":master, "widget":toolbar}, None)
+                self.wwidget_plot.placeRelative(changeHeight=-30)
+                self.wwidget_settings.placeRelative(stickDown=True, fixHeight=30)
+
+                master = master._get()
+            else:
+                master = figureWidget.get_tk_widget()
+
+            self.data = {"master": _master, "widget": master, "figureWidget":figureWidget, "init": init}
+        else:
+            raise TKExceptions.InvalidWidgetTypeException(
+                "_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(
+                    _master.__class__.__name__))
+        super().__init__(self, self.data, group)
+
+    def _updatePlace(self, e):
+        self.wwidget_plot.updateRelativePlace()
+        self.wwidget_settings.updateRelativePlace()
+
+    def _bind(self):
+        self.bind(self._updatePlace, EventType.CUSTOM_RELATIVE_UPDATE)
+
+
+
+    def draw(self):
+        self["figureWidget"].draw()
+        return self
 class Calendar(Widget):
     def __init__(self, _master, group=None):
         import tkcalendar as cal
@@ -2004,8 +2065,8 @@ class Checkbutton(Widget):
     def setState(self, b:bool):
         self["intVar"].set(bool(b))
         return self
-    def getState(self):
-        return self["intVar"].get()
+    def getState(self)->bool:
+        return bool(self["intVar"].get())
     def setSelectColor(self, c:Color):
         self._setAttribute("selectcolor", c.value if hasattr(c, "value") else c)
         return self
@@ -2623,6 +2684,11 @@ class Text(Widget):
         if not text.endswith("\n"): text = text+"\n"
         self.addText(t.strftime("[%H:%M:%S]: ")+text, color)
         return self
+    def setStrf(self, text):
+        self.clear()
+        self.addStrf(text)
+        return self
+
     def addStrf(self, text):
         """
         §D: DEFAULT
@@ -2659,7 +2725,6 @@ class Text(Widget):
         """
 
         _text = text
-        print(text)
         for i in ['§D', '§W', '§B', '§r', '§g', '§b', '§c', '§y', '§m', '§o']:
             _text = _text.replace(i, "")
         content = self.getText()
@@ -3298,7 +3363,6 @@ class NotebookTab(Widget):
         if not self["placed"]:
             print("!! ALREADY destroyd tab name" + self["name"])
             raise
-            return
         #assert self["placed"], f"Widget is already destroyed! {self['name']} {self}"
         print("destroy tab name"+self["name"])
         for id, widg in zip(self["childWidgets"].keys(), self["childWidgets"].values()):
@@ -3333,7 +3397,7 @@ class Notebook(Widget):
                 self._name = ""
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self.data, None)
     def _init(self):
         self.onTabSelectEvent(self._updateTab)
     def onTabSelectEvent(self, func, args:list=None, priority:int=0, disableArgs=False, defaultArgs=False):
@@ -3464,12 +3528,10 @@ class Notebook(Widget):
         super().destroy()
         for tab in self["tabIndexList"]:  # destroy all tabs
             tab.destroy()
-
 class CustomStyle:
     def __init__(self, master, widget):
         self.data = {"master":master, "widget":widget}
 
-        pass
     def getType(self):
         return self.data["widget"]._get().winfo_class()
 
@@ -3895,10 +3957,54 @@ class ColorChooser:
             mas.destroy()
             return anw
 
+class MenuPage(Frame):
+    def __init__(self, master, group=None, homeScreen=False):
+        super().__init__(master, group)
+        self._menuData = {
+            "home_screen":homeScreen,
+            "history":[self],
+            "master":self["tkMaster"],
+            "active":False
+        }
+    def openMenuPage(self, **kwargs):
+        self._menuData["active"] = True
+        self.onShow(**kwargs)
+        self._menuData["master"].updateDynamicWidgets()
+
+    def openNextMenuPage(self, mp, **kwargs):
+        self._menuData["active"] = False
+        self.placeForget()
+        history = self._menuData["history"].copy()
+        history.append(mp)
+        mp._menuData["history"] = history
+        mp.onShow(**kwargs)
+        self._menuData["master"].updateDynamicWidgets()
+
+    def openLastMenuPage(self):
+        if len(self._menuData) > 1:
+            self.placeForget()
+            newHistory = self._menuData["history"].copy()[:-1]
+            history = newHistory[-1]
+            history._menuData["history"] = newHistory
+            history.onShow()
+            self._menuData["master"].updateDynamicWidgets()
+    def _onShow(self, **kwargs):
+        self._menuData["active"] = True
+        self.onShow(**kwargs)
+
+    def onShow(self, **kwargs):
+        pass
+
+    def onHide(self):
+        pass
+
+
+
+
 Combobox = DropdownMenu
 Menu = TaskBar
 
 if __name__ == '__main__':
-    a = SimpleDialog.askUsernamePassword(None, title="passwordDialog", initialUname="raspberry")
+    a = SimpleDialog.askUsernamePassword(None, title="passwordDialog", initialUname="raspberry", default="test")
 
     print(a, type(a))
