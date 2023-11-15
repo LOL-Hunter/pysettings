@@ -1199,6 +1199,7 @@ class Tk:
         relevantIDs = list(self["dynamicWidgets"].keys())
         for widget in self._getAllChildWidgets(self):
             if widget.getID() in relevantIDs:
+                if isinstance(widget, ToolTip): continue
                 if not widget["destroyed"]: self._updateDynamicSize(widget)
 
 
@@ -1384,8 +1385,8 @@ class Widget:
     def setTextOrientation(self, ori:Anchor=Anchor.LEFT):
         self._setAttribute("anchor", ori.value if hasattr(ori, "value") else ori)
         return self
-    def attachToolTip(self, text:str, atext:str="", waitBeforeShow=.5):
-        return ToolTip(self, atext != "", waitBeforeShow=waitBeforeShow).setText(text).setAdditionalText(atext)
+    def attachToolTip(self, text:str, atext:str="", group=None, waitBeforeShow=.5):
+        return ToolTip(self, atext != "", waitBeforeShow=waitBeforeShow, group=group).setText(text).setAdditionalText(atext)
     def setOrientation(self, ori:Orient):
         self._setAttribute("orient", ori.value if hasattr(ori, "value") else ori)
         return self
@@ -1749,6 +1750,7 @@ class ToolTip(Widget):
                          "wrapLength":180,
                          "task":None,
                          "tip":None,
+                         "group":group,
                          "tipLabel":None}
             self["master"].bind(self._enter, "<Enter>")
             self["master"].bind(self._leave, "<Leave>")
@@ -1794,10 +1796,10 @@ class ToolTip(Widget):
         x += self["master"]._get().winfo_rootx() + 25
         y += self["master"]._get().winfo_rooty() + 20
         self._hidetip()
-        self["tip"] = Toplevel(self["master"]["tkMaster"])
+        self["tip"] = Toplevel(self["master"]["tkMaster"], group=self["group"])
         self["tip"].overrideredirect()
         self["tip"].setPositionOnScreen(x, y)
-        self["tipLabel"] = Label(self["tip"], ).applyTkOption(text=self["text"], justify='left', background="#ffffff", relief='solid', borderwidth=1, wraplength = self["wrapLength"])
+        self["tipLabel"] = Label(self["tip"], group=self["group"]).applyTkOption(text=self["text"], justify='left', relief='solid', borderwidth=1, wraplength = self["wrapLength"])
         self["tipLabel"]._get().pack(ipadx=1)
     def _hidetip(self):
         pin = self["tip"]
@@ -3966,7 +3968,10 @@ class MenuPage(Frame):
             "master":self["tkMaster"],
             "active":False
         }
+    def __str__(self):
+        return type(self).__name__
     def openMenuPage(self, **kwargs):
+        # remove other active Page
         self._menuData["active"] = True
         self.onShow(**kwargs)
         self._menuData["master"].updateDynamicWidgets()
@@ -3983,10 +3988,10 @@ class MenuPage(Frame):
     def openLastMenuPage(self):
         if len(self._menuData) > 1:
             self.placeForget()
-            newHistory = self._menuData["history"].copy()[:-1]
-            history = newHistory[-1]
-            history._menuData["history"] = newHistory
-            history.onShow()
+            newHistory = self._menuData["history"].copy()[:-1] # remove self
+            history = newHistory[-1] # get new "self" -> last item
+            history._menuData["history"] = newHistory # set hist to new instance
+            history.onShow() # show new instance
             self._menuData["master"].updateDynamicWidgets()
     def _onShow(self, **kwargs):
         self._menuData["active"] = True
