@@ -1655,9 +1655,9 @@ class _WidgetGroupMethod:
                 raise Exception(f"Error while execute '{self._name}' command on [{len(self._ins._widgets)}].\nType: {type(w)}, Error: {e}")
 class WidgetGroup:
     _GROUPS = []
-    def __init__(self, type_=None):
+    def __init__(self, type_=None, instantiate=None):
         self._widgets = []
-        self._commandsOnRegister = []
+        self._commandsOnRegister = [*instantiate._commandsOnRegister] if instantiate is not None else []
         self._data = {
             "ignoreErrors":False,
             "changeOnlyForType":None,
@@ -3734,7 +3734,7 @@ class FileDialog:
     def openDirectory(master=None, title=None, initialpath=None):
         return FileDialog._dialog(fd.askdirectory, master=master, title=title, initialpath=initialpath)
     @staticmethod
-    def saveFile(master=None, title=None, initialpath=None, types=None):
+    def saveFile(master=None, title=None, initialpath=None, types:list=None):
         if types is None:
             types = []
         return FileDialog._dialog(fd.asksaveasfilename, master=master, title=title, initialpath=initialpath, types=types)
