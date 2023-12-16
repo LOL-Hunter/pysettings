@@ -1,4 +1,4 @@
-﻿import tkinter.simpledialog as simd
+import tkinter.simpledialog as simd
 import tkinter.colorchooser as colorChooser
 import tkinter.messagebox as msg
 import tkinter.filedialog as fd
@@ -74,7 +74,7 @@ def paste_text():
 
 """
 # WIDGET GROUPS TO CHANGE SETTINGS FOR ALL
-#Funcs from class Wm
+# Funcs from class Wm
 """
 WM_ATTRIBUTES
 -alpha double
@@ -365,7 +365,7 @@ class Cmd:
 class PILImage:
     def __init__(self, image):
         import PIL.Image as Image
-        self.copy = self.clone
+        self.copy = self.clone # redundant method
         self._preRenderedImage = None
         self._pilImage = Image # cuz pil.image must exist in whole class!
         self._useOrg = False
@@ -376,6 +376,12 @@ class PILImage:
         else:
             raise TKExceptions.InvalidUsageException("Use 'Image.loadImage(<path>)' instead! Not:"+str(type(image)))
         self._original = self._image.copy()
+
+    def __del__(self):
+        self._original.close()
+        self._image.close()
+        del self._pilImage
+
     @staticmethod
     def loadImage(path):
         if os.path.exists(path):
@@ -461,7 +467,7 @@ class TkImage:
 class Event:
     def __init__(self, dic=None, **kwargs):
         if dic is None:
-            self.data = {"afterTriggered":None,
+            self._data = {"afterTriggered":None,
                          "setCanceled": False,
                          "widget": None,
                          "args":[],
@@ -478,21 +484,25 @@ class Event:
                          "pos":None,
                          "setTkEventCanceled":False}
         else:
-            self.data = dic.data
+            self._data = dic._data
 
         for k, v in zip(kwargs.keys(), kwargs.items()):
-            self.data[k] = v
+            self._data[k] = v
     def __repr__(self):
-        func = f"'{'' if not hasattr(self.data['func'], '__self__') else self.data['func'].__self__.__class__.__name__ + '.'}{self.data['func'] if not hasattr(self.data['func'], '__name__') else self.data['func'].__name__}'"
+        func = f"'{'' if not hasattr(self._data['func'], '__self__') else self._data['func'].__self__.__class__.__name__ + '.'}{self._data['func'] if not hasattr(self._data['func'], '__name__') else self._data['func'].__name__}'"
         return f"Event({{func: {func}, args:"+str(self["args"])+", priority:"+str(self["priority"])+", setCanceled:"+str(self["setCanceled"])+"})"
+
+    def __del__(self):
+        self._data.clear()
+
     def __call__(self):
         if self["handler"] is None:
             return
         return self["handler"]()
     def __getitem__(self, item):
-        return self.data[item]
+        return self._data[item]
     def __setitem__(self, key, value):
-        self.data[key] = value
+        self._data[key] = value
     def __lt__(self, other):
         return self["priority"] < other["priority"]
     def getTkArgs(self):
@@ -529,19 +539,23 @@ class ScrollBarEvent(Event):
 class _EventRegistry:
     def __init__(self, ins):
         if isinstance(ins, Widget) or isinstance(ins, Tk) or isinstance(ins, CanvasObject):
-            self.data = {"event":{}, "widget":ins} # event : { type_ : ( <type:_EventHandler>, [<type:Event>, ...] ) }
+            self._data = {"event":{}, "widget":ins} # event : { type_ : ( <type:_EventHandler>, [<type:Event>, ...] ) }
         elif isinstance(ins, dict):
-            self.data = ins
+            self._data = ins
         elif isinstance(ins, _EventRegistry):
-            self.data = ins.data
+            self._data = ins._data
         else:
             raise TKExceptions.InvalidWidgetTypeException("ins must be " + str(self.__class__.__name__) + " instance not: " + str(ins.__class__.__name__))
     def __repr__(self):
-        return str(self.__class__.__name__)+"("+str(self.data)+")"
+        return str(self.__class__.__name__)+"("+str(self._data)+")"
+
+    def __del__(self):
+        self._data.clear()
+
     def __getitem__(self, item):
-        return self.data[item]
+        return self._data[item]
     def __setitem__(self, key, value):
-        self.data[key] = value
+        self._data[key] = value
     def printAllBinds(self):
         print("Widget: "+self["widget"].__class__.__name__)
         for k, v in zip(self["event"].keys(), self["event"].values()):
@@ -602,6 +616,7 @@ class EventHandler:
     def __setitem__(self, key, value):
         self.event[key] = value
     def __call__(self, *args):
+        if self.event is None: return
         def raiseError():
             exc = format_exc()
             info = f"""
@@ -648,8 +663,9 @@ class EventHandler:
                     out = func()
                 except:
                     raiseError()
+            if not len(event._data): return False # destoyed
             if event["afterTriggered"] is not None: event["afterTriggered"](event, out)
-        #print("AFTER CALLED", self.event.data)
+        #print("AFTER CALLED", self.event._data)
         if event is None: return
         if event["forceReturn"] is None:
             if event["setTkEventCanceled"]:
@@ -886,24 +902,24 @@ class Tk:
         self.quit = self.quitMainLoop
         self.withdraw = self.hide
         if _master is None:
-            self.data = {"master": _tk_.Tk(), "registry":_EventRegistry(self), "placeRelData":{"handler":None}, "isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "setSize":(),  "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}, "closeRunnable":None, "title":""}
+            self._data = {"master": _tk_.Tk(), "registry":_EventRegistry(self), "placeRelData":{"handler":None}, "isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "setSize":(),  "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}, "closeRunnable":None, "title":""}
 
             #configure internal onCloseEvent
             self["master"].protocol("WM_DELETE_WINDOW", self._internalOnClose)
 
         elif isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, Tk):
-            self.data = _master.data
+            self._data = _master._data
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance not: " + str(_master.__class__.__name__))
     def __str__(self):
-        return str(self.__class__.__name__)+"("+str(self.data)+")"
+        return str(self.__class__.__name__)+"("+str(self._data)+")"
     def __getitem__(self, item):
-        try:return self.data[item]
+        try:return self._data[item]
         except KeyError as e: raise KeyError("Item '"+str(item)+"' is not in dict of class '"+self["master"].__class__.__name__+"'")
     def __setitem__(self, key, value):
-        self.data[key] = value
+        self._data[key] = value
     def __del__(self):
         pass
         #print("__DELETE__", type(self))
@@ -1043,6 +1059,7 @@ class Tk:
             for w in widgets:
                 w.destroy()
             self["master"].destroy()
+            self._data.clear()
             return True
 
         except Exception as e:
@@ -1146,26 +1163,26 @@ class Tk:
         if not widget["destroyed"] and "xOffset" in widget["placeRelData"]:# and widget["id"] in list(self["dynamicWidgets"].keys()):
             widget._get().place_forget()
             self._get().update_idletasks()
-            data = widget["placeRelData"]
-            x = _map(data["xOffset"] + data["xOffsetLeft"], 0, 100, 0, widget["master"].getWidth()) if data["fixX"] is None else data["fixX"]
-            y = _map(data["yOffset"] + data["yOffsetUp"], 0, 100, 0, widget["master"].getHeight()) if data["fixY"] is None else data["fixY"]
+            _data = widget["placeRelData"]
+            x = _map(_data["xOffset"] + _data["xOffsetLeft"], 0, 100, 0, widget["master"].getWidth()) if _data["fixX"] is None else _data["fixX"]
+            y = _map(_data["yOffset"] + _data["yOffsetUp"], 0, 100, 0, widget["master"].getHeight()) if _data["fixY"] is None else _data["fixY"]
 
-            width = ((widget["master"].getWidth() - _map(data["xOffset"] + data["xOffsetRight"], 0, 100, 0, widget["master"].getWidth()) - x) - (widget.data["yScrollbar"]["thickness"] if "yScrollbar" in list(widget.data.keys()) and widget.data["yScrollbar"]["autoPlace"] else 0) if data["fixWidth"] is None else data["fixWidth"])
-            height = ((widget["master"].getHeight() - _map(data["yOffset"] + data["yOffsetDown"], 0, 100, 0, widget["master"].getHeight()) - y) - (widget.data["xScrollbar"]["thickness"] if "xScrollbar" in list(widget.data.keys()) and widget.data["xScrollbar"]["autoPlace"] else 0) if data["fixHeight"] is None else data["fixHeight"])
-            if data["stickRight"]:
+            width = ((widget["master"].getWidth() - _map(_data["xOffset"] + _data["xOffsetRight"], 0, 100, 0, widget["master"].getWidth()) - x) - (widget._data["yScrollbar"]["thickness"] if "yScrollbar" in list(widget._data.keys()) and widget._data["yScrollbar"]["autoPlace"] else 0) if _data["fixWidth"] is None else _data["fixWidth"])
+            height = ((widget["master"].getHeight() - _map(_data["yOffset"] + _data["yOffsetDown"], 0, 100, 0, widget["master"].getHeight()) - y) - (widget._data["xScrollbar"]["thickness"] if "xScrollbar" in list(widget._data.keys()) and widget._data["xScrollbar"]["autoPlace"] else 0) if _data["fixHeight"] is None else _data["fixHeight"])
+            if _data["stickRight"]:
                 x = widget["master"].getWidth()-width
-            if data["stickDown"]:
+            if _data["stickDown"]:
                 y = widget["master"].getHeight()-height
-            if data["centerX"]:
+            if _data["centerX"]:
                 x = int(round(widget["master"].getWidth()/2 - width/2, 0))
-            if data["centerY"]:
+            if _data["centerY"]:
                 y = int(round(widget["master"].getHeight()/2 - height/2, 0))
 
-            width += data["changeWidth"]
-            height += data["changeHeight"]
+            width += _data["changeWidth"]
+            height += _data["changeHeight"]
 
-            x += data["changeX"]
-            y += data["changeY"]
+            x += _data["changeX"]
+            y += _data["changeY"]
 
             widget["widget"].place(x=x,
                                  y=y,
@@ -1173,20 +1190,20 @@ class Tk:
                                  height=height,
                                  anchor=Anchor.UP_LEFT.value)
 
-            if data["handler"] is not None:
-                handler = data["handler"]
+            if _data["handler"] is not None:
+                handler = _data["handler"]
                 for event in widget["registry"].getCallables("[relative_update]"):
                     event["value"] = [x, y, width, height]
                 handler()
 
-            if "xScrollbar" in list(widget.data.keys()) and widget.data["xScrollbar"]["autoPlace"]:
-                widget.data["xScrollbar"].place(x, y + height, width=width)
+            if "xScrollbar" in list(widget._data.keys()) and widget._data["xScrollbar"]["autoPlace"]:
+                widget._data["xScrollbar"].place(x, y + height, width=width)
 
-            if "yScrollbar" in list(widget.data.keys()) and widget.data["yScrollbar"]["autoPlace"]:
-                widget.data["yScrollbar"].place(x + width, y, height=height)
+            if "yScrollbar" in list(widget._data.keys()) and widget._data["yScrollbar"]["autoPlace"]:
+                widget._data["yScrollbar"].place(x + width, y, height=height)
 
-            if data["handler"] is not None:
-                handler = data["handler"]
+            if _data["handler"] is not None:
+                handler = _data["handler"]
                 for event in widget["registry"].getCallables("[relative_update_after]"):
                     event["value"] = [x, y, width, height]
                 handler()
@@ -1247,7 +1264,7 @@ class Tk:
 
         @return:
         """
-        self.data["childWidgets"].clear()
+        self._data["childWidgets"].clear()
 
     def addChildWidgets(self, *args):
         """
@@ -1257,7 +1274,7 @@ class Tk:
         @return:
         """
         for w in args:
-            self.data["childWidgets"][w["id"]] = w
+            self._data["childWidgets"][w["id"]] = w
 
     def unregisterChildWidget(self, w):
         """
@@ -1315,20 +1332,20 @@ class Toplevel(Tk):
     """
     def __init__(self, _master, group=None, topMost=True):
         if isinstance(_master, Tk):
-            self.data = {"master": _tk_.Toplevel(), "tkMaster":_master, "registry":_EventRegistry(self), "setSize":(), "isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}, "title":"", "closeRunnable":None}
+            self._data = {"master": _tk_.Toplevel(), "tkMaster":_master, "registry":_EventRegistry(self), "setSize":(), "isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}, "title":"", "closeRunnable":None}
             EventHandler._registerNewEvent(self, self.updateDynamicWidgets, EventType.key("<Configure>"), args=[], priority=1, decryptValueFunc=self._privateDecryptWindowResize)
             # configure internal onCloseEvent
             self["master"].protocol("WM_DELETE_WINDOW", self._internalOnClose)
         elif isinstance(_master, str) and _master == "Tk":
-            self.data = {"master":_tk_.Tk(), "tkMaster":_master, "placeRelData":{"handler":None}, "registry":_EventRegistry(self), "setSize":(),"isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1),"id":"".join([str(r.randint(0, 9)) for _ in range(15)]), "dynamicWidgets":{}, "title":"", "closeRunnable":None}
+            self._data = {"master":_tk_.Tk(), "tkMaster":_master, "placeRelData":{"handler":None}, "registry":_EventRegistry(self), "setSize":(),"isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1),"id":"".join([str(r.randint(0, 9)) for _ in range(15)]), "dynamicWidgets":{}, "title":"", "closeRunnable":None}
             EventHandler._registerNewEvent(self, self.updateDynamicWidgets, EventType.key("<Configure>"), args=[],priority=1, decryptValueFunc=self._privateDecryptWindowResize)
             # configure internal onCloseEvent
             self["master"].protocol("WM_DELETE_WINDOW", self._internalOnClose)
         elif isinstance(_master, Toplevel):
-            self.data = _master.data
+            self._data = _master._data
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " or Tk instance not: " + str(_master.__class__.__name__))
-        super().__init__(self.data, group)
+        super().__init__(self._data, group)
         if topMost: self.setAllwaysOnTop()
     def setTitle(self, title):
         self["title"] = title
@@ -1351,37 +1368,40 @@ class Dialog(Toplevel):
         self["master"].withdraw()
 
 class Widget:
-    def __init__(self, ins, data, group):
+    def __init__(self, ins, _data, group):
         self._ins = self if ins is None else ins
         self.disable = self.setDisabled
         self.enable = self.setEnabled
-        if list(data.keys()).__contains__("id"): self.data = data
+        if list(_data.keys()).__contains__("id"): self._data = _data
         else:
-            data["tkMaster"] = data["master"] if isinstance(data["master"], Tk) else data["master"]["tkMaster"]
+            _data["tkMaster"] = _data["master"] if isinstance(_data["master"], Tk) else _data["master"]["tkMaster"]
             id = "".join([str(r.randint(0,9)) for _ in range(15)])
-            self.data = {**data, **{"widgetProperties":{},"childWidgets":{}, "id":id, "placed":True, "destroyed":False, "placeRelData":{"handler":None}, "registry":_EventRegistry(self), "group":group}}
-            self.data["master"]["childWidgets"][self["id"]] = self._ins
-            if list(data.keys()).__contains__("init"):
-                for key, value in zip(data["init"].keys(), data["init"].values()):
+            self._data = {**_data, **{"widgetProperties":{},"childWidgets":{}, "id":id, "placed":True, "destroyed":False, "placeRelData":{"handler":None}, "registry":_EventRegistry(self), "group":group}}
+            self._data["master"]["childWidgets"][self["id"]] = self._ins
+            if list(_data.keys()).__contains__("init"):
+                for key, value in zip(_data["init"].keys(), _data["init"].values()):
                     if key == "func": value()
                     else: self._setAttribute(name=key, value=value)
-                del data["init"]
+                del _data["init"]
         if group is not None:
             group.add(self._ins)
     def __getitem__(self, item):
-        try:return self.data[item]
+        try:return self._data[item]
         except KeyError as e: raise KeyError("Item '"+str(item)+"' is not in dict of class '"+self["widget"].__class__.__name__+"'")
     def __setitem__(self, key, value):
-        self.data[key] = value
+        self._data[key] = value
     def __str__(self):
-        return str(self.__class__.__name__)+"("+str(self.data)+")"
+        return str(self.__class__.__name__)+"("+str(self._data)+")"
     def __eq__(self, other):
-        if not hasattr(other, "data"): return False
-        return self.data == other.data
+        if not hasattr(other, "_data"): return False
+        return self._data == other._data
     def __del__(self):
-        print("__DELETE__", type(self))
+        #print("__DELETE__", type(self))
+        if not len(self._data): return
         if self["group"] is not None:
             self["group"].remove(self._ins)
+        self._data.clear()
+
     def setTextOrientation(self, ori:Anchor=Anchor.LEFT):
         self._setAttribute("anchor", ori.value if hasattr(ori, "value") else ori)
         return self
@@ -1392,8 +1412,8 @@ class Widget:
         return self
     def _setId(self, id_:str): #@TODO: why? maby error with event??
         self["id"] = str(id_)
-    def _addData(self, data:dict):
-        self.data = {**self.data, **data}
+    def _addData(self, _data:dict):
+        self._data = {**self._data, **_data}
     def unbind(self, event:Union[EventType, Key, Mouse]):
         self["registry"].unregisterType(event)
     def setStyle(self, style:Style):
@@ -1462,14 +1482,14 @@ class Widget:
         self["tkMaster"]._updateDynamicSize(self)
         return self
     def setFont(self, size:int=10, art=FontType.ARIAL, underline=False, bold=False, slant=False, overstrike=False):
-        data = {'family': art.value if hasattr(art, "value") else art,
+        _data = {'family': art.value if hasattr(art, "value") else art,
                 'size': size,                            # size
                 'weight': 'bold' if slant else 'normal', # fett
                 'slant': 'italic' if bold else'roman',   # kusiv
                 'underline': bool(underline),            # unterstrichen
                 'overstrike': bool(overstrike)}          # durchgestrichen
 
-        self._setAttribute("font", _font.Font(**data))
+        self._setAttribute("font", _font.Font(**_data))
         return self
     def setText(self, text):
         self._setAttribute("text", str(text))
@@ -1501,7 +1521,7 @@ class Widget:
     def _placeRelative(self, fixX, fixY, fixWidth, fixHeight, xOffset, yOffset, xOffsetLeft, xOffsetRight, yOffsetUp, yOffsetDown, stickRight, stickDown, centerY, centerX, changeX, changeY, changeWidth, changeHeight, nextTo, updateOnResize):
         assert 100 >= xOffset + xOffsetLeft >= 0 and 100 >= xOffset + xOffsetRight >= 0, "xOffset must be a int Value between 0 and 100!"
         assert 100 >= yOffset + yOffsetUp >= 0 and 100 >= yOffset + yOffsetDown >= 0, "yOffset must be a int Value between 0 and 100!"
-        self.data["placeRelData"] = {"handler":self["placeRelData"]["handler"],
+        self._data["placeRelData"] = {"handler":self["placeRelData"]["handler"],
                                      "xOffset":xOffset,
                                      "xOffsetLeft":xOffsetLeft,
                                      "xOffsetRight":xOffsetRight,
@@ -1573,6 +1593,8 @@ class Widget:
         for w in self["childWidgets"].copy().values():
             self["tkMaster"]._unregisterOnResize(w)
             w.destroy()
+        self._data.clear()
+
     def destroy(self):
         self._destroy()
         return self
@@ -1590,7 +1612,7 @@ class Widget:
 
         @return:
         """
-        self.data["childWidgets"].clear()
+        self._data["childWidgets"].clear()
 
     def addChildWidgets(self, *args):
         """
@@ -1600,7 +1622,7 @@ class Widget:
         @return:
         """
         for w in args:
-            self.data["childWidgets"][w["id"]] = w
+            self._data["childWidgets"][w["id"]] = w
 
     def unregisterChildWidget(self, w):
         """
@@ -1620,7 +1642,7 @@ class Widget:
     def _register(self, e):
         self["master"].register(e)
     def _setAttribute(self, name, value):
-        if self.data["tkMaster"]["destroyed"]: return
+        if self._data["tkMaster"]["destroyed"]: return
         self["widgetProperties"][name] = value
         try:
             self["widget"][name] = value
@@ -1641,17 +1663,17 @@ class _WidgetGroupMethod:
             """
             There is an execution with settings only used once!
             """
-            data = self._ins._priorityData.copy()
+            _data = self._ins._priorityData.copy()
             self._ins._priorityData = None
         else:
-            data = self._ins._data.copy()
+            _data = self._ins._data.copy()
 
         for i, w in enumerate(self._ins._widgets):
-            if data["changeOnlyForType"] is not None and not isinstance(w, data["changeOnlyForType"]): continue
+            if _data["changeOnlyForType"] is not None and not isinstance(w, _data["changeOnlyForType"]): continue
             try:
                 out = getattr(w, self._name)(*args, **kwargs)
             except Exception as e:
-                if data["ignoreErrors"]: continue
+                if _data["ignoreErrors"]: continue
                 raise Exception(f"Error while execute '{self._name}' command on [{len(self._ins._widgets)}].\nType: {type(w)}, Error: {e}")
 class WidgetGroup:
     _GROUPS = []
@@ -1736,11 +1758,11 @@ class ToolTip(Widget):
     """
     def __init__(self, _master, pressShiftForMoreInfo=False, waitBeforeShow=.5, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, Widget):
-            self.data = {"master": _master,
+            self._data = {"master": _master,
                          "disableTip":False,
                          "widget":None,
                          "init": {},
@@ -1759,7 +1781,7 @@ class ToolTip(Widget):
             if pressShiftForMoreInfo: self["master"]["tkMaster"].bind(self._more, "<KeyPress-Shift_L>", args=["press"])
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def setDisabled(self):
         self["disableTip"] = True
     def setEnabled(self):
@@ -1810,15 +1832,15 @@ class PDFViewer(Widget):
     def __init__(self, _master, path, group=None):
         from tkPDFViewer import tkPDFViewer as pdf
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
             viewer = pdf.ShowPdf()
-            self.data = {"master": _master, "widget": viewer.pdf_view(_master._get(), 200, 200, path), "init": {}}
+            self._data = {"master": _master, "widget": viewer.pdf_view(_master._get(), 200, 200, path), "init": {}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
 
 class MatPlotLibFigure(Widget):
     def __init__(self, _master, fig, group=None, toolBar=False):
@@ -1826,9 +1848,9 @@ class MatPlotLibFigure(Widget):
         from matplotlib.backend_bases import key_press_handler
         from matplotlib.figure import Figure
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
             master = _master
             init = {}
@@ -1853,12 +1875,12 @@ class MatPlotLibFigure(Widget):
             else:
                 master = figureWidget.get_tk_widget()
 
-            self.data = {"master": _master, "widget": master, "figureWidget":figureWidget, "init": init}
+            self._data = {"master": _master, "widget": master, "figureWidget":figureWidget, "init": init}
         else:
             raise TKExceptions.InvalidWidgetTypeException(
                 "_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(
                     _master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
 
     def _updatePlace(self, e):
         self.wwidget_plot.updateRelativePlace()
@@ -1876,14 +1898,14 @@ class Calendar(Widget):
     def __init__(self, _master, group=None):
         import tkcalendar as cal
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master": _master, "widget": cal.Calendar(_master._get()), "init": {}}
+            self._data = {"master": _master, "widget": cal.Calendar(_master._get()), "init": {}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def setDate(self, d, m, y):
         self._setAttribute("day", d)
         self._setAttribute("month", m)
@@ -1911,14 +1933,14 @@ class DropdownCalendar(Widget):
     def __init__(self, _master, group=None):
         import tkcalendar as cal
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master": _master, "widget": cal.DateEntry(_master._get()), "init": {}}
+            self._data = {"master": _master, "widget": cal.DateEntry(_master._get()), "init": {}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def setDate(self, d, m, y):
         self._setAttribute("day", d)
         self._setAttribute("month", m)
@@ -1939,14 +1961,14 @@ class DropdownCalendar(Widget):
 class ScrollBar(Widget):
     def __init__(self, _master, autoPlace=True, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master": _master, "widget": ttk.Scrollbar(_master._get()), "autoPlace":autoPlace, "thickness":18, "init": {}}
+            self._data = {"master": _master, "widget": ttk.Scrollbar(_master._get()), "autoPlace":autoPlace, "thickness":18, "init": {}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def callEventOnScrollbarRelease(self):
         self._setAttribute("jump", 1)
     def callEventOnScroll(self):
@@ -1963,12 +1985,12 @@ class ScrollBar(Widget):
 class Frame(Widget):
     def __init__(self, _master, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master": _master,  "widget": _tk_.Frame(_master._get())}
+            self._data = {"master": _master,  "widget": _tk_.Frame(_master._get())}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def __destroy(self):
         assert self["placed"], "Widget is already destroyed!"
         for id, widg in zip(self["childWidgets"].keys(), self["childWidgets"].values()):
@@ -1986,13 +2008,13 @@ class Frame(Widget):
 class LabelFrame(Widget):
     def __init__(self, _master, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
 
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master": _master,  "widget": _tk_.LabelFrame(_master._get())}
+            self._data = {"master": _master,  "widget": _tk_.LabelFrame(_master._get())}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
 
     def __destroy(self):
         print("test2<-----")
@@ -2013,14 +2035,14 @@ class LabelFrame(Widget):
 class Label(Widget):
     def __init__(self, _master, group=None, **kwargs):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master":_master,  "widget":_tk_.Label(_master._get()), "init":kwargs}
+            self._data = {"master":_master,  "widget":_tk_.Label(_master._get()), "init":kwargs}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+" or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def clear(self):
         self.setText("")
         return self
@@ -2038,19 +2060,19 @@ class Checkbutton(Widget):
         self.getValue = self.getState
         self.setValue = self.setState
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, _SubMenu):
-            self.data = {"master": _master._master,  "widget": _tk_.Checkbutton(_master._master._get()), "instanceOfMenu":True}
+            self._data = {"master": _master._master,  "widget": _tk_.Checkbutton(_master._master._get()), "instanceOfMenu":True}
             _master._widgets.append(["checkbutton", self])
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
             intVar = _tk_.IntVar(_master._get())
             intVar.set(defaultState)
-            self.data = {"master":_master, "text":text, "widget":_tk_.Checkbutton(_master._get()), "intVar":intVar, "init":{"text":text, "variable":intVar}}
+            self._data = {"master":_master, "text":text, "widget":_tk_.Checkbutton(_master._get()), "intVar":intVar, "init":{"text":text, "variable":intVar}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def __bool__(self):
         return bool(self.getState())
     def onSelectEvent(self, func, args:list = None, priority:int=0, defaultArgs=False, disableArgs=False):
@@ -2076,41 +2098,41 @@ class Radiobutton:
     def __init__(self, _master, group=None):
         self.getValue = self.getState
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
             intVar = IntVar(_master)
-            self.data = {"master": _master,  "widgets":[], "intVar":intVar, "eventArgs":[], "group":group}
+            self._data = {"master": _master,  "widgets":[], "intVar":intVar, "eventArgs":[], "group":group}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
 
     def __getitem__(self, item):
-        return self.data[item]
+        return self._data[item]
 
 
     def getState(self):
-        return self.data["intVar"].get()
+        return self._data["intVar"].get()
     def setState(self, i:int):
-        self.data["widgets"][i].setSelected()
+        self._data["widgets"][i].setSelected()
         return self
 
 
     def createNewRadioButton(self, group=None):
-        rb =_RadioButton(self.data["master"], self.data["intVar"], (group if group is not None else self["group"]))
-        self.data["widgets"].append(rb)
-        for i in self.data["eventArgs"]:
+        rb =_RadioButton(self._data["master"], self._data["intVar"], (group if group is not None else self["group"]))
+        self._data["widgets"].append(rb)
+        for i in self._data["eventArgs"]:
             EventHandler._registerNewCommand(rb, i["func"], i["args"], i["priority"], decryptValueFunc=rb._decryptEvent, defaultArgs=i["defaultArgs"], disableArgs=i["disableArgs"])
         return rb
     def onSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        self.data["eventArgs"].append({"func":func, "args":args , "priority":priority, "defaultArgs":defaultArgs, "disableArgs":disableArgs})
-        for btn in self.data["widgets"]:
+        self._data["eventArgs"].append({"func":func, "args":args , "priority":priority, "defaultArgs":defaultArgs, "disableArgs":disableArgs})
+        for btn in self._data["widgets"]:
             EventHandler._registerNewCommand(btn, func, args, priority, decryptValueFunc=btn._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
 class _RadioButton(Widget):
     def __init__(self, _master, intVar, group):
-        self.data = {"master": _master, "widget": _tk_.Radiobutton(_master._get()), "intvar": intVar, "init": {"variable": intVar._get(), "value": intVar._add()}}
-        super().__init__(self, self.data, group)
+        self._data = {"master": _master, "widget": _tk_.Radiobutton(_master._get()), "intvar": intVar, "init": {"variable": intVar._get(), "value": intVar._add()}}
+        super().__init__(self, self._data, group)
     def setSelected(self):
         self["intvar"].set(self["widget"]["value"])
         return self
@@ -2128,22 +2150,22 @@ class _RadioButton(Widget):
 class Button(Widget):
     def __init__(self, _master, group=None, text="", canBePressedByReturn=True, fireOnlyOnce=True, fireInterval:float=0.1, firstDelay:float=0.5):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master":_master, "widget":_tk_.Button(_master._get()), "canBePressedByReturn":canBePressedByReturn, "instanceOfMenu":False, "init":{"text":text}}
+            self._data = {"master":_master, "widget":_tk_.Button(_master._get()), "canBePressedByReturn":canBePressedByReturn, "instanceOfMenu":False, "init":{"text":text}}
             if not fireOnlyOnce:
-                self.data["init"]["repeatdelay"] = int(firstDelay * 1000)
-                self.data["init"]["repeatinterval"] = int(fireInterval * 1000)
+                self._data["init"]["repeatdelay"] = int(firstDelay * 1000)
+                self._data["init"]["repeatinterval"] = int(fireInterval * 1000)
         elif isinstance(_master, _SubMenu) or isinstance(_master, ContextMenu):
             group = None # not possible!
             if isinstance(_master, ContextMenu): _master = _master["mainSubMenu"]
-            self.data = {"master":_master._master, "widget":_tk_.Button(_master._master._get()), "instanceOfMenu":True}
+            self._data = {"master":_master._master, "widget":_tk_.Button(_master._master._get()), "instanceOfMenu":True}
             _master._widgets.append(["command", self])
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def triggerButtonPress(self, normalRelief=True):
         if normalRelief: self.setStyle(Style.SUNKEN)
         self.update()
@@ -2172,20 +2194,20 @@ class Button(Widget):
 class OnOffButton(Widget):
     def __init__(self, _master, group=None, text="", default=False, colorsActive=True, reliefActive=False):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master":_master,  "text":text, "widget":_tk_.Button(_master._get()), "value":default, "relief":reliefActive, "color":colorsActive, "onText":None, "offText":None, "init":{"text":text}}
+            self._data = {"master":_master,  "text":text, "widget":_tk_.Button(_master._get()), "value":default, "relief":reliefActive, "color":colorsActive, "onText":None, "offText":None, "init":{"text":text}}
             if default:
-                if colorsActive: self.data["init"]["bg"] = Color.GREEN.value
-                if reliefActive: self.data["init"]["relief"] = Style.SUNKEN.value
+                if colorsActive: self._data["init"]["bg"] = Color.GREEN.value
+                if reliefActive: self._data["init"]["relief"] = Style.SUNKEN.value
             else:
-                if colorsActive: self.data["init"]["bg"] = Color.RED.value
-                if reliefActive: self.data["init"]["relief"] = Style.SUNKEN.value
+                if colorsActive: self._data["init"]["bg"] = Color.RED.value
+                if reliefActive: self._data["init"]["relief"] = Style.SUNKEN.value
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def setValue(self, v):
         self["value"] = bool(v)
         self._update()
@@ -2230,14 +2252,14 @@ class Entry(Widget):
         self.getValue = self.getText
         self.setValue = self.setText
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master":_master,  "widget":_tk_.Entry(_master._get())}
+            self._data = {"master":_master,  "widget":_tk_.Entry(_master._get())}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def attachHorizontalScrollBar(self, sc:ScrollBar):
         self["xScrollbar"] = sc
         sc["widget"]["orient"] = _tk_.HORIZONTAL
@@ -2290,9 +2312,9 @@ class TextEntry(LabelFrame):
         super().__init__(_master, group)
 
         if isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            data = {"value":"", "label":Label(self, group), "entry":Entry(self, group)}
-            data["label"].setText(text)
-            self._addData(data)
+            _data = {"value":"", "label":Label(self, group), "entry":Entry(self, group)}
+            _data["label"].setText(text)
+            self._addData(_data)
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
 
@@ -2301,8 +2323,8 @@ class TextEntry(LabelFrame):
         EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
     def updatePlace(self):
-        self.data["label"]._get().grid(row=0, column=0)
-        self.data["entry"]._get().grid(row=0, column=1, sticky=Anchor.RIGHT.value)
+        self._data["label"]._get().grid(row=0, column=0)
+        self._data["entry"]._get().grid(row=0, column=1, sticky=Anchor.RIGHT.value)
     def getValue(self):
         return self.getEntry().getValue()
     def setValue(self, v):
@@ -2326,16 +2348,16 @@ class TextEntry(LabelFrame):
     def place(self, x=0, y=0, width=None, height=25, anchor=Anchor.UP_LEFT, entryStartX=None):
         offset = 5
         self._place(x, y, 200, height, anchor)
-        self.data["label"].place(0, 0)
-        labelWidth = self.data["label"].getWidth()
+        self._data["label"].place(0, 0)
+        labelWidth = self._data["label"].getWidth()
         if entryStartX is not None: labelWidth = entryStartX
         if width is None:
             width = labelWidth+100
             entryWidth = 100
         else:
             entryWidth = width - labelWidth
-        self.data["label"].place(0, 0, labelWidth, height-offset)
-        self.data["entry"].place(labelWidth, 0, entryWidth-offset, height-offset)
+        self._data["label"].place(0, 0, labelWidth, height-offset)
+        self._data["entry"].place(labelWidth, 0, entryWidth-offset, height-offset)
         self._place(x, y, width, height, anchor)
         return self
     def placeRelative(self, fixX=None, fixY=None, fixWidth=None, fixHeight=None, xOffset=0, yOffset=0, xOffsetLeft=0, xOffsetRight=0, yOffsetUp=0, yOffsetDown=0, stickRight=False, stickDown=False, centerY=False, centerX=False, changeX=0, changeY=0, changeWidth=0, changeHeight=0, nextTo=None, updateOnResize=True):
@@ -2347,19 +2369,19 @@ class TextEntry(LabelFrame):
 class TextDropdownMenu(Widget):
     def __init__(self, _master, group=None, text=""):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
             widg = LabelFrame(_master)
-            self.data = {"master":_master,  "widget":widg, "value":"", "dropdownMenu":DropdownMenu(widg), "label":Label(widg)}
-            self.data["widget"]._get().grid(padx=10, pady=10)
-            self.data["label"].setText(text)
-            self.data["label"]._get().grid(row=0, column=0)
-            self.data["dropdownMenu"]._get().grid(row=0, column=1)
+            self._data = {"master":_master,  "widget":widg, "value":"", "dropdownMenu":DropdownMenu(widg), "label":Label(widg)}
+            self._data["widget"]._get().grid(padx=10, pady=10)
+            self._data["label"].setText(text)
+            self._data["label"]._get().grid(row=0, column=0)
+            self._data["dropdownMenu"]._get().grid(row=0, column=1)
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
         if event == "CANCEL": return
         EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
@@ -2383,14 +2405,14 @@ class Listbox(Widget):
     MULTIPLE = "multiple"
     def __init__(self, _master, group=None, mode=SINGLE):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master":_master,  "widget":_tk_.Listbox(_master._get()), "selectionMode":mode, "init":{"selectmode":mode}, "default_color":Color.DEFAULT}
+            self._data = {"master":_master,  "widget":_tk_.Listbox(_master._get()), "selectionMode":mode, "init":{"selectmode":mode}, "default_color":Color.DEFAULT}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def bindArrowKeys(self, widget=None, ifNoSelectionSelect0=True):
         def _up(e):
             if self["placed"]:
@@ -2537,15 +2559,15 @@ class Scale(Widget):
     def __init__(self, _master, from_=0, to=100, group=None, orient:Orient=Orient.HORIZONTAL):
         self.setResolution = self.setSteps
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
             doubbleVar = _tk_.DoubleVar(_master._get())
-            self.data = {"master":_master,  "widget":_tk_.Scale(_master._get()), "var":doubbleVar, "init":{"variable":doubbleVar, "from_":from_, "to":to, "orient":orient.value if hasattr(orient, "value") else orient}}
+            self._data = {"master":_master,  "widget":_tk_.Scale(_master._get()), "var":doubbleVar, "init":{"variable":doubbleVar, "from_":from_, "to":to, "orient":orient.value if hasattr(orient, "value") else orient}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def getValue(self):
         return self["var"].get()
     def setValue(self, v):
@@ -2581,14 +2603,14 @@ class Scale(Widget):
 class Progressbar(Widget):
     def __init__(self, _master, group=None, values:int=100):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master":_master,  "widget":ttk.Progressbar(_master._get()), "values":values, "value":0}
+            self._data = {"master":_master,  "widget":ttk.Progressbar(_master._get()), "values":values, "value":0}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def setNormalMode(self):
         self["widget"].stop()
         self._setAttribute("mode", "determinate")
@@ -2670,14 +2692,14 @@ class Text(Widget):
     def __init__(self, _master, group=None, readOnly=False, forceScroll=False, scrollAble=False):
         self.getContent = self.getText
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master": _master,  "widget": _ScrolledText(_master._get()) if scrollAble else _tk_.Text(_master._get()), "forceScroll":forceScroll, "tagCounter":0, "scrollable":scrollAble, "init":{"state":"disabled" if readOnly else "normal"}}
+            self._data = {"master": _master,  "widget": _ScrolledText(_master._get()) if scrollAble else _tk_.Text(_master._get()), "forceScroll":forceScroll, "tagCounter":0, "scrollable":scrollAble, "init":{"state":"disabled" if readOnly else "normal"}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def addLine(self, text, color="black"):
         if not text.endswith("\n"): text = text+"\n"
         self.addText(text, color)
@@ -2836,13 +2858,13 @@ class Text(Widget):
     def _decryptEvent(self, args):
         return self.getText()
 class _SubFolder:
-    def __init__(self, parent, data):
+    def __init__(self, parent, _data):
         self._parent = parent
-        self.data = data
+        self._data = _data
     def __getitem__(self, item):
-        return self.data[item]
+        return self._data[item]
     def __setitem__(self, key, value):
-        self.data[key] = value
+        self._data[key] = value
     def addEntry(self, *args, index="end"):
         if isinstance(args[0], tuple) or isinstance(args[0], list):
             args = args[0]
@@ -2859,13 +2881,13 @@ class _SubFolder:
         if len(self["headers"]) != len(list(args)):
             raise TKExceptions.InvalidHeaderException("Length of headers must be the same as args of addEntry!")
         parent = self["widget"].insert(parent=self._parent, index=index, text=args[0], values=args[1:])
-        return _SubFolder(parent, self.data)
+        return _SubFolder(parent, self._data)
 class TreeViewElement:
     def __init__(self, tv, _id=None):
         if isinstance(tv, TreeView):
-            self.data = {"master":tv, "id":_id}
+            self._data = {"master":tv, "id":_id}
         elif isinstance(tv, TreeViewElement):
-            self.data = tv.data
+            self._data = tv._data
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be TreeViewElement instance not: " + str(tv.__class__.__name__))
 
@@ -2892,14 +2914,14 @@ class TreeView(Widget):
     """
     def __init__(self, _master, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master": _master,  "widget":ttk.Treeview(_master._get()), "headers":[], "elements":[]}
+            self._data = {"master": _master,  "widget":ttk.Treeview(_master._get()), "headers":[], "elements":[]}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def onDoubleSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
         EventHandler._registerNewEvent(self, func, Mouse.DOUBBLE_LEFT, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
     def onSingleSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
@@ -2978,6 +3000,19 @@ class TreeView(Widget):
         entry = TreeViewElement(self, _id)
         self["elements"].append(entry)
         return self
+    def setEntry(self, *args, index=0):
+        index = self._getIds()[index]
+        #if isinstance(image, TkImage) or isinstance(image, PILImage):
+        #    image = image._get()
+        if isinstance(args[0], tuple) or isinstance(args[0], list):
+            args = args[0]
+        if len(self["headers"]) == 0:
+            raise TKExceptions.InvalidHeaderException("Set Tree Headers first!")
+        if len(self["headers"]) != len(list(args)):
+            raise TKExceptions.InvalidHeaderException("Length of headers must be the same as args of addEntry!")
+        #if image is not None: _id = self["widget"].item(index, parent="", text=args[0], values=args[1:], image=image)
+        else: _id = self["widget"].item(index, text=args[0], values=args[1:])
+        return self
     def createFolder(self, *args, index="end"):
         if isinstance(args[0], tuple) or isinstance(args[0], list):
             args = args[0]
@@ -2986,7 +3021,7 @@ class TreeView(Widget):
         if len(self["headers"]) != len(list(args)):
             raise TKExceptions.InvalidHeaderException("Length of headers must be the same as args of addEntry!")
         parent = self["widget"].insert(parent="", index=index, text=args[0], values=args[1:])
-        return _SubFolder(parent, self.data)
+        return _SubFolder(parent, self._data)
     def setNoSelectMode(self):
         self._setAttribute("selectmode", "none")
         return self
@@ -3029,7 +3064,7 @@ class TreeView(Widget):
     def getDataByIndex(self, index)->dict:
         return self._getDataFromId(self._getIds()[index])
     def getSelectedIndex(self):
-        if self["widgetProperties"]["selectmode"] == "browse":
+        if self["widget"]["selectmode"] == "browse":
             if len(self["widget"].curselection()) == 0: return -1
             return self._getIds().index(self["widget"].selection()[0])
         else:
@@ -3044,14 +3079,14 @@ class TreeView(Widget):
 class SpinBox(Widget):
     def __init__(self, _master, group=None, optionList:list=(), readOnly=True):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame):
-            self.data = {"master": _master,  "widget": _tk_.Spinbox(_master._get()), "readonly":readOnly, "init":{"state":"readonly" if readOnly else "normal", "values":list(optionList)}}
+            self._data = {"master": _master,  "widget": _tk_.Spinbox(_master._get()), "readonly":readOnly, "init":{"state":"readonly" if readOnly else "normal", "values":list(optionList)}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def onButtonClick(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
         EventHandler._registerNewCommand(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
     def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
@@ -3103,18 +3138,18 @@ class SpinBox(Widget):
 class DropdownMenu(Widget):
     def __init__(self, _master, group=None, optionList:list=(), readonly=True):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
             stringVar = _tk_.StringVar()
-            self.data = {"master": _master,  "widget":ttk.Combobox(_master._get(), textvariable=stringVar), "values":optionList, "stringVar":stringVar, "readonly":readonly, "init":{"state":"readonly" if readonly else "normal", "values":list(optionList)}}
+            self._data = {"master": _master,  "widget":ttk.Combobox(_master._get(), textvariable=stringVar), "values":optionList, "stringVar":stringVar, "readonly":readonly, "init":{"state":"readonly" if readonly else "normal", "values":list(optionList)}}
             self.style= ttk.Style()
             #self.style.theme_use("clam")
 
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def setReadOnly(self, b=True):
         self["readonly"] = b
         self._setAttribute("state", "readonly")
@@ -3197,30 +3232,30 @@ class DropdownMenu(Widget):
 class Separator(Widget):
     def __init__(self, _master, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master": _master,  "widget":ttk.Separator(_master._get())}
+            self._data = {"master": _master,  "widget":ttk.Separator(_master._get())}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
 class TaskBar(Widget):
     def __init__(self, _master, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
             if _master["hasMenu"]: raise RuntimeError("You cannot apply two Menus to the Window!") #@TODO Runtime ???
             _master["hasMenu"] = True
-            self.data = {"master": _master,  "widget": _tk_.Menu(_master._get(), tearoff=False), "subMenu":[], "group":group}
-            _master._get().config(menu=self.data["widget"])
+            self._data = {"master": _master,  "widget": _tk_.Menu(_master._get(), tearoff=False), "subMenu":[], "group":group}
+            _master._get().config(menu=self._data["widget"])
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def createSubMenu(self, name:str):
-        m = _SubMenu(self["master"], self["widget"], self.data, name, self["group"])
+        m = _SubMenu(self["master"], self["widget"], self._data, name, self["group"])
         #_SubMenu._SUB_MENUS.append(m)
         self["subMenu"].append(m)
         self["widget"].add("cascade", label=name, menu=m._menu)
@@ -3233,13 +3268,13 @@ class TaskBar(Widget):
         for i in self["subMenu"]: i.create()
 class _SubMenu:
     _SUB_MENUS = []
-    def __init__(self, master, menu, data, name, group):
+    def __init__(self, master, menu, _data, name, group):
         self._id = "".join([str(r.randint(0,9)) for _ in range(15)])
         self._widgets = [] #[["command", <type: Button>], ["cascade", <type: Button>, <type: SubMenu>]]
-        self.data = data
+        self._data = _data
         self._name = name
         self._group = group
-        self.data["created"] = False
+        self._data["created"] = False
         self._master = master
         self._masterMenu = menu
         self._menu = _tk_.Menu(menu, tearoff=False)
@@ -3266,41 +3301,41 @@ class _SubMenu:
                 print(e)
         self._widgets = []
     def createSubMenu(self, button:Button, group):
-        m = _SubMenu(self._master, self._menu, self.data, (button["widgetProperties"]["text"] if "text" in button["widgetProperties"].keys() else ""), group)
+        m = _SubMenu(self._master, self._menu, self._data, (button["widgetProperties"]["text"] if "text" in button["widgetProperties"].keys() else ""), group)
         self._widgets.append(["cascade", button, m])
         return m
     def addSeparator(self):
         self._widgets.append(["separator", None])
     def create(self): #@TODO fix if menus are created after mainloop
-        #if self.data["created"]: return#@TODO FIX self.data["create"] is True
+        #if self._data["created"]: return#@TODO FIX self._data["create"] is True
         for widget in self._widgets:
             if widget[1] is not None:
-                data = widget[1]["widgetProperties"].copy()
-                if data.keys().__contains__("text"): data["label"] = data["text"]
-                if widget[0] == "cascade": data["menu"] = widget[2]._menu if hasattr(widget[2], "_menu") else widget[2]
-                self._menu.add(widget[0], **{k:v for k, v in zip(data.keys(), data.values()) if ['accelerator', 'activebackground', 'activeforeground', 'background', 'bitmap', 'columnbreak', 'command', 'compound', 'font', 'fg', 'bg', 'hidemargin', 'image', 'label', 'menu', 'offvalue', 'onvalue', 'selectcolor', 'selectimage', 'state', 'underline', 'value', 'variable'].__contains__(k)})
+                _data = widget[1]["widgetProperties"].copy()
+                if _data.keys().__contains__("text"): _data["label"] = _data["text"]
+                if widget[0] == "cascade": _data["menu"] = widget[2]._menu if hasattr(widget[2], "_menu") else widget[2]
+                self._menu.add(widget[0], **{k:v for k, v in zip(_data.keys(), _data.values()) if ['accelerator', 'activebackground', 'activeforeground', 'background', 'bitmap', 'columnbreak', 'command', 'compound', 'font', 'fg', 'bg', 'hidemargin', 'image', 'label', 'menu', 'offvalue', 'onvalue', 'selectcolor', 'selectimage', 'state', 'underline', 'value', 'variable'].__contains__(k)})
                 if widget[0] == "cascade" and hasattr(widget[2], "create"):
                     widget[2].create()
             else:
                 #print(type(widget[0]), widget)
                 self._menu.add(widget[0], {})
-        self.data["created"] = True
+        self._data["created"] = True
 class ContextMenu(Widget):
     def __init__(self, _master, group=None, closable=True, eventType:Union[EventType, Key, Mouse, None]=EventType.key(Mouse.RIGHT_CLICK)):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif hasattr(_master, "_get"):
-            self.data = {"master": _master,  "widget": _tk_.Menu(_master._get(), tearoff=0), "subMenu":[], "closable":closable, "eventType":eventType, "group":group}
+            self._data = {"master": _master,  "widget": _tk_.Menu(_master._get(), tearoff=0), "subMenu":[], "closable":closable, "eventType":eventType, "group":group}
             if eventType is not None: EventHandler._registerNewEvent(_master, self.open, eventType, [], 1, decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
-            self.data["mainSubMenu"] = self._createSubMenu()
+            self._data["mainSubMenu"] = self._createSubMenu()
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
 
     def _createSubMenu(self):
-        m = _SubMenu(self["master"], self["widget"], self.data, "", self["group"])
+        m = _SubMenu(self["master"], self["widget"], self._data, "", self["group"])
         m._menu = self["widget"]
         self["subMenu"].append(m)
         return m
@@ -3338,16 +3373,16 @@ class NotebookTab(Widget):
     def __init__(self, _master, notebook=None, name=None, group=None):
         self.setTabName = self.setText
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master": notebook, "widget": _tk_.Frame(notebook._get()), "tabWidget": notebook, "tabId": None, "name":name}
-            notebook._get().add(self.data["widget"], text=name)
-            self.data["tabId"] = self.getNumberOfTabs()-1
+            self._data = {"master": notebook, "widget": _tk_.Frame(notebook._get()), "tabWidget": notebook, "tabId": None, "name":name}
+            notebook._get().add(self._data["widget"], text=name)
+            self._data["tabId"] = self.getNumberOfTabs()-1
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def getTabIndex(self):
         return self["tabId"]
     def getTabName(self):
@@ -3387,11 +3422,11 @@ class Notebook(Widget):
             Notebook._STYLE = self._initializeCustomStyle()
             Notebook._INITIALIZED = True
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master":_master,  "widget":ttk.Notebook(_master._get()), "tabIndexList":[], "runnable":None, "group":group, "init":{"func":self._init, "style":"CustomNotebook" if closable else ""}}
+            self._data = {"master":_master,  "widget":ttk.Notebook(_master._get()), "tabIndexList":[], "runnable":None, "group":group, "init":{"func":self._init, "style":"CustomNotebook" if closable else ""}}
             if closable:
                 self._get().bind("<ButtonPress-1>", self._on_close_press, True)
                 self._get().bind("<ButtonRelease-1>", self._on_close_release)
@@ -3399,7 +3434,7 @@ class Notebook(Widget):
                 self._name = ""
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, None)
+        super().__init__(self, self._data, None)
     def _init(self):
         self.onTabSelectEvent(self._updateTab)
     def onTabSelectEvent(self, func, args:list=None, priority:int=0, disableArgs=False, defaultArgs=False):
@@ -3424,11 +3459,11 @@ class Notebook(Widget):
         style = ttk.Style()
         self.images = (
             _tk_.PhotoImage("img_close",
-                          data="R0lGODlhCAAIAMIBAAAAADs7O4+Pj9nZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
+                          _data="R0lGODlhCAAIAMIBAAAAADs7O4+Pj9nZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
             _tk_.PhotoImage("img_closeactive",
-                          data="R0lGODlhCAAIAMIEAAAAAP/SAP/bNNnZ2cbGxsbGxsbGxsbGxiH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
+                          _data="R0lGODlhCAAIAMIEAAAAAP/SAP/bNNnZ2cbGxsbGxsbGxsbGxiH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
             _tk_.PhotoImage("img_closepressed",
-                          data="R0lGODlhCAAIAMIEAAAAAOUqKv9mZtnZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs=")
+                          _data="R0lGODlhCAAIAMIEAAAAAOUqKv9mZtnZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs=")
         )
 
         style.element_create("close", "image", "img_close",
@@ -3532,45 +3567,45 @@ class Notebook(Widget):
             tab.destroy()
 class CustomStyle:
     def __init__(self, master, widget):
-        self.data = {"master":master, "widget":widget}
+        self._data = {"master":master, "widget":widget}
 
     def getType(self):
-        return self.data["widget"]._get().winfo_class()
+        return self._data["widget"]._get().winfo_class()
 
 #finish
 class Canvas(Widget):
     def __init__(self, _master, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self.data = {"master": _master, "widget": _tk_.Canvas(_master._get()), "canObjs":{}}
+            self._data = {"master": _master, "widget": _tk_.Canvas(_master._get()), "canObjs":{}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def clear(self):
         for i in list(self["canObjs"].values()).copy():
             i.destroy()
 class CanvasObject:
-    def __init__(self, _ins, data, group):
+    def __init__(self, _ins, _data, group):
         if group is not None:
             group.add(_ins)
         self._ins = _ins
-        self.data = data
+        self._data = _data
         self.draw = self.render
-        if not list(self.data.keys()).__contains__("id"):
-            self.data["loc1"] = None
-            self.data["loc2"] = None
-            self.data["width"] = None
-            self.data["height"] = None
-            self.data["id"] = "".join([str(r.randint(0,9)) for _ in range(15)])
-            self.data["master"]["canObjs"][self._ins["id"]] = self._ins
-            self.data["registry"] = _EventRegistry(self)
+        if not list(self._data.keys()).__contains__("id"):
+            self._data["loc1"] = None
+            self._data["loc2"] = None
+            self._data["width"] = None
+            self._data["height"] = None
+            self._data["id"] = "".join([str(r.randint(0,9)) for _ in range(15)])
+            self._data["master"]["canObjs"][self._ins["id"]] = self._ins
+            self._data["registry"] = _EventRegistry(self)
     def __getitem__(self, item):
-        return self.data[item]
+        return self._data[item]
     def __setitem__(self, key, value):
-        self.data[key] = value
+        self._data[key] = value
     def getType(self):
         return type(self._ins)
     def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
@@ -3591,10 +3626,10 @@ class CanvasObject:
         else:
             self.destroy()
             if self["loc2"] is None:
-                self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY(), self["loc1"].getX()+self["width"], self["loc1"].getY()+self["height"]), kw=self["data"])
+                self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY(), self["loc1"].getX()+self["width"], self["loc1"].getY()+self["height"]), kw=self["_data"])
             else:
-                self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY(), self["loc2"].getX(), self["loc2"].getY()), kw=self["data"])
-            self.data["master"]["canObjs"][self._ins["id"]] = self._ins
+                self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY(), self["loc2"].getX(), self["loc2"].getY()), kw=self["_data"])
+            self._data["master"]["canObjs"][self._ins["id"]] = self._ins
         return self
     def setLocation(self, loc:Location2D):
         self["loc1"] = loc.clone()
@@ -3609,70 +3644,70 @@ class CanvasObject:
         self["height"] = int(l)
         return self
     def setBg(self, col: Union[Color, str]):
-        self["data"]["fill"] = col.value if hasattr(col, "value") else col
+        self["_data"]["fill"] = col.value if hasattr(col, "value") else col
         return self
     def setOutlineThickness(self, i:int):
-        self["data"]["width"] = i
+        self["_data"]["width"] = i
         return self
     def setOutlineColor(self, col: Union[Color, str]):
-        self["data"]["outline"] = col.value if hasattr(col, "value") else col
+        self["_data"]["outline"] = col.value if hasattr(col, "value") else col
         return self
     def setAnchor(self, anchor):
-        self["data"]["anchor"] = anchor.value if hasattr(anchor, "value") else anchor
+        self["_data"]["anchor"] = anchor.value if hasattr(anchor, "value") else anchor
     def clone(self):
-        data = self.data.copy()
-        data["objID"] = None
-        return self._ins.__class__(data)
+        _data = self._data.copy()
+        _data["objID"] = None
+        return self._ins.__class__(_data)
     def destroy(self):
-        if self.data["objID"] is not None and self._ins["id"] in self["master"]["canObjs"]:
+        if self._data["objID"] is not None and self._ins["id"] in self["master"]["canObjs"]:
             #self["registry"].unregisterAll()
             self["master"]["canObjs"].pop(self._ins["id"])
             self["master"]._get().delete(self["objID"])
             self["objID"] = None
     def _get(self):
-        return self.data["master"]._get()
+        return self._data["master"]._get()
 class CanvasImage(CanvasObject):
     def __init__(self, _master=None, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Canvas):
-            self.data = {"master": _master, "objID":None, "widget":None, "type":"image", "image":None, "data":{"anchor":"nw"}}
+            self._data = {"master": _master, "objID":None, "widget":None, "type":"image", "image":None, "_data":{"anchor":"nw"}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance or Canvas not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
 
     def setImage(self, i:Union[TkImage, PILImage]):
-        self["data"]["image"] = i._get()
+        self["_data"]["image"] = i._get()
         return self
     def render(self):
         self.destroy()
-        self["objID"] = self["master"]._get()._create(self["type"], (self["loc1"].getX(), self["loc1"].getY()), self["data"])
-        self.data["master"]["canObjs"][self["id"]] = self
+        self["objID"] = self["master"]._get()._create(self["type"], (self["loc1"].getX(), self["loc1"].getY()), self["_data"])
+        self._data["master"]["canObjs"][self["id"]] = self
         return self
 class CanvasRect(CanvasObject):
     def __init__(self, _master=None, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Canvas):
-            self.data = {"master": _master, "objID":None, "widget":None, "type":"rectangle", "data":{}}
+            self._data = {"master": _master, "objID":None, "widget":None, "type":"rectangle", "_data":{}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance or Canvas not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
 class CanvasCircle(CanvasObject):
     def __init__(self, _master=None, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Canvas):
-            self.data = {"master": _master, "objID":None, "widget":None, "type":"oval", "data":{}}
+            self._data = {"master": _master, "objID":None, "widget":None, "type":"oval", "_data":{}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance or Canvas not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def placeCenterWithRadius(self, loc:Location2D, r:int):
         loc = loc.clone()
         self.setLocation(loc.change(x=-r, y=-r))
@@ -3682,14 +3717,14 @@ class CanvasCircle(CanvasObject):
 class CanvasLine(CanvasObject):
     def __init__(self, _master=None, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Canvas):
-            self.data = {"master": _master, "objID":None, "widget":None, "type":"line", "data":{}}
+            self._data = {"master": _master, "objID":None, "widget":None, "type":"line", "_data":{}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance or Canvas not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def placeByDegree(self, loc:Location2D, d:int, length:int):
         import math
         x = loc.getX()+math.cos(math.radians(d)) * length
@@ -3700,28 +3735,28 @@ class CanvasLine(CanvasObject):
 class CanvasText(CanvasObject):
     def __init__(self, _master=None, group=None):
         if isinstance(_master, dict):
-            self.data = _master
+            self._data = _master
         elif isinstance(_master, self.__class__):
-            self.data = _master.data
+            self._data = _master._data
         elif isinstance(_master, Canvas):
-            self.data = {"master": _master, "objID":None, "widget":None, "type":"text", "data":{}}
+            self._data = {"master": _master, "objID":None, "widget":None, "type":"text", "_data":{}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance or Canvas not: " + str(_master.__class__.__name__))
-        super().__init__(self, self.data, group)
+        super().__init__(self, self._data, group)
     def setText(self, text):
-        self["data"]["text"] = str(text)
+        self["_data"]["text"] = str(text)
         return self
     def setFont(self, size, art=FontType.ARIAL):
-        self["data"]["font"] = (art.value if hasattr(art, "value") else art, size)
+        self["_data"]["font"] = (art.value if hasattr(art, "value") else art, size)
         return self
     def render(self):
-        if "loc2" not in list(self.data.keys()):
-            self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY()), kw=self["data"])
+        if "loc2" not in list(self._data.keys()):
+            self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY()), kw=self["_data"])
         else:
-            self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY()), kw=self["data"])
+            self["objID"] = self["master"]._get()._create(self["type"], args=(self["loc1"].getX(), self["loc1"].getY()), kw=self["_data"])
         return self
     def setTextAngle(self, a):
-        self["data"]["angle"] = int(a)
+        self["_data"]["angle"] = int(a)
         return self
 
 class FileDialog:
@@ -3752,20 +3787,20 @@ class FileDialog:
                     _types += (("", str(i),),)
                 else:
                     raise TKExceptions.InvalidFileExtention(str(i)+" is not a valid Extention! Use .<ext>!")
-        data = {"title":str(title),
+        _data = {"title":str(title),
                 "initialdir":initialpath}
-        if func != fd.askdirectory: data["filetypes"] = _types
+        if func != fd.askdirectory: _data["filetypes"] = _types
         if initialpath is not None and os.path.split(initialpath)[1]!="" and False:# Disabled
-            data["initialfile"] = os.path.split(initialpath)[1]
+            _data["initialfile"] = os.path.split(initialpath)[1]
         if master is None:
             destroy = True
             master = Tk()
             master.hide()
-            data["parent"] = master._get()
+            _data["parent"] = master._get()
 
-        #data["filetypes"] = (('', ''), ('', ''), ('', '*.jpg'), ('', '*.png'), ('', '*.jpeg'), ('', '*.ppm'), ('', '*.gif'))
+        #_data["filetypes"] = (('', ''), ('', ''), ('', '*.jpg'), ('', '*.png'), ('', '*.jpeg'), ('', '*.ppm'), ('', '*.gif'))
 
-        path = func(**data)
+        path = func(**_data)
         if destroy: master.destroy()
         if path == "" or path is None:
             return None
@@ -3982,6 +4017,7 @@ class MenuPage(Frame):
         history = self._menuData["history"].copy()
         history.append(mp)
         mp._menuData["history"] = history
+        mp._menuData["active"] = True
         mp.onShow(**kwargs)
         self._menuData["master"].updateDynamicWidgets()
 
@@ -3992,19 +4028,20 @@ class MenuPage(Frame):
             history = newHistory[-1] # get new "self" -> last item
             history._menuData["history"] = newHistory # set hist to new instance
             history.onShow() # show new instance
+            history._menuData["active"] = True
             self._menuData["master"].updateDynamicWidgets()
     def _onShow(self, **kwargs):
         self._menuData["active"] = True
         self.onShow(**kwargs)
+
+    def isActive(self):
+        return self._menuData["active"]
 
     def onShow(self, **kwargs):
         pass
 
     def onHide(self):
         pass
-
-
-
 
 Combobox = DropdownMenu
 Menu = TaskBar
