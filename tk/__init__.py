@@ -1386,6 +1386,7 @@ class Widget:
         if group is not None:
             group.add(self._ins)
     def __getitem__(self, item):
+        if not len(self._data): return
         try:return self._data[item]
         except KeyError as e: raise KeyError("Item '"+str(item)+"' is not in dict of class '"+self["widget"].__class__.__name__+"'")
     def __setitem__(self, key, value):
@@ -2334,10 +2335,10 @@ class TextEntry(LabelFrame):
     def setText(self, text):
         self.getLabel().setText(text)
         return self
-    def getEntry(self):
-        return Entry(self["entry"])
-    def getLabel(self):
-        return Label(self["label"])
+    def getEntry(self)->Entry:
+        return self["entry"]
+    def getLabel(self)->Label:
+        return self["label"]
     def clear(self):
         self.getEntry().clear()
         return self
@@ -3459,11 +3460,11 @@ class Notebook(Widget):
         style = ttk.Style()
         self.images = (
             _tk_.PhotoImage("img_close",
-                          _data="R0lGODlhCAAIAMIBAAAAADs7O4+Pj9nZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
+                          data="R0lGODlhCAAIAMIBAAAAADs7O4+Pj9nZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
             _tk_.PhotoImage("img_closeactive",
-                          _data="R0lGODlhCAAIAMIEAAAAAP/SAP/bNNnZ2cbGxsbGxsbGxsbGxiH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
+                          data="R0lGODlhCAAIAMIEAAAAAP/SAP/bNNnZ2cbGxsbGxsbGxsbGxiH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs="),
             _tk_.PhotoImage("img_closepressed",
-                          _data="R0lGODlhCAAIAMIEAAAAAOUqKv9mZtnZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs=")
+                          data="R0lGODlhCAAIAMIEAAAAAOUqKv9mZtnZ2Ts7Ozs7Ozs7Ozs7OyH+EUNyZWF0ZWQgd2l0aCBHSU1QACH5BAEKAAQALAAAAAAIAAgAAAMVGDBEA0qNJyGw7AmxmuaZhWEU5kEJADs=")
         )
 
         style.element_create("close", "image", "img_close",
