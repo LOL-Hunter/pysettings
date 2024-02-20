@@ -11,83 +11,20 @@ from datetime import date
 from enum import Enum
 from traceback import format_exc
 import random as r
-import string
 import time as t
+import string
+import os
 try:
     from ..geometry import Location2D, _map, Rect
     from ..text import MsgText, TextColor
 except ImportError:
     from pysettings.geometry import Location2D, _map, Rect
     from pysettings.text import MsgText, TextColor
-import os
 
 ## TEMP ##
 from pysettings.text import TextColor
 
-tk = None # cuz i'm sometimes dump lol
 WIDGET_DELETE_DEBUG = False
-#Draggable class
-
-#TODO Cannot bind two same events!!!
-#Check Entry Content: https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/entry-validation.html
-#System-Tray: https://www.tutorialspoint.com/how-to-create-a-system-tray-icon-of-a-tkinter-application
-#icon zb askyesno
-#ttk.Styles ???
-#spinBox scrollable + onScrollEvent
-#finish calendar
-#key: https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/key-names.html
-#Scrollbar: https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/scrollbar.html
-#def clone(self): -> widget
-
-#TEMPLATES
-#-Keyboard
-#statisc tamplate
-"""
-# Various canvas styles
-PIESLICE='pieslice'
-CHORD='chord'
-ARC='arc'
-FIRST='first'
-LAST='last'
-BUTT='butt'
-PROJECTING='projecting'
-ROUND='round'
-BEVEL='bevel'
-MITER='miter'
-
-"""
-
-"""
-
-
-def cut_text():
-        text.event_generate(("<<Cut>>"))
-# define function to copy 
-# the selected text
-def copy_text():
-        text.event_generate(("<<Copy>>"))
-# define function to paste 
-# the previously copied text
-def paste_text():
-        text.event_generate(("<<Paste>>"))
-
-
-"""
-# WIDGET GROUPS TO CHANGE SETTINGS FOR ALL
-# Funcs from class Wm
-"""
-WM_ATTRIBUTES
--alpha double
-how opaque the overall window is; note that changing between 1.0 and any other value may cause the window to flash (Tk changes the class of window used to implement the toplevel).
--fullscreen boolean
-controls whether the window fills the whole screen, including taskbar
--disabled boolean
-makes it impossible to interact with the window and redraws the focus
--toolwindow boolean
-makes a window with a single close-button (which is smaller than usual) on the right of the title bar
--topmost boolean
-makes sure the window always stays on top of all other windows
-"""
 
 class TKExceptions:
     class InvalidFileExtention(Exception):
@@ -468,21 +405,22 @@ class Event:
     def __init__(self, dic=None, **kwargs):
         if dic is None:
             self._data = {"afterTriggered":None,
-                         "setCanceled": False,
-                         "widget": None,
-                         "args":[],
-                         "priority":0,
-                         "tkArgs":None,
-                         "func":None,
-                         "value":None,
-                         "eventType":None,
-                         "defaultArgs":False,
-                         "disableArgs":True,
-                         "decryptValueFunc":None,
-                         "forceReturn":None,
-                         "handler":None,
-                         "pos":None,
-                         "setTkEventCanceled":False}
+                          "setCanceled": False,
+                          "widget": None,
+                          "args":[],
+                          "priority":0,
+                          "tkArgs":None,
+                          "func":None,
+                          "value":None,
+                          "eventType":None,
+                          "defaultArgs":False,
+                          "disableArgs":True,
+                          "decryptValueFunc":None,
+                          "forceReturn":None,
+                          "handler":None,
+                          "pos":None,
+                          "setTkEventCanceled":False
+                          }
         else:
             self._data = dic._data
 
@@ -491,15 +429,15 @@ class Event:
     def __repr__(self):
         func = f"'{'' if not hasattr(self._data['func'], '__self__') else self._data['func'].__self__.__class__.__name__ + '.'}{self._data['func'] if not hasattr(self._data['func'], '__name__') else self._data['func'].__name__}'"
         return f"Event({{func: {func}, args:"+str(self["args"])+", priority:"+str(self["priority"])+", setCanceled:"+str(self["setCanceled"])+"})"
-
     def __del__(self):
         self._data.clear()
-
     def __call__(self):
         if self["handler"] is None:
             return
         return self["handler"]()
     def __getitem__(self, item):
+        if item == "widget" and "widget" not in self._data.keys():
+            print(self._data)
         return self._data[item]
     def __setitem__(self, key, value):
         self._data[key] = value
@@ -639,6 +577,7 @@ class EventHandler:
         event = None
         out = None
         cancTk = False
+        #print(self.event._data)
         for event in self.event["widget"]["registry"].getCallables(self.event["eventType"]): #TODO get only the output of the last called func. problem? maybe priorities
             func = event["func"]
             event["tkArgs"] = args
@@ -1546,7 +1485,7 @@ class Widget:
         if updateOnResize:
             self["tkMaster"]._registerOnResize(self)
         return self
-    def placeRelative(self, fixX=None, fixY=None, fixWidth=None, fixHeight=None, xOffset=0, yOffset=0, xOffsetLeft=0, xOffsetRight=0, yOffsetUp=0, yOffsetDown=0, stickRight=False, stickDown=False, centerY=False, centerX=False, changeX=0, changeY=0, changeWidth=0, changeHeight=0, nextTo=None, updateOnResize=True):
+    def placeRelative(self, fixX:int=None, fixY:int=None, fixWidth:int=None, fixHeight:int=None, xOffset=0, yOffset=0, xOffsetLeft=0, xOffsetRight=0, yOffsetUp=0, yOffsetDown=0, stickRight=False, stickDown=False, centerY=False, centerX=False, changeX=0, changeY=0, changeWidth=0, changeHeight=0, nextTo=None, updateOnResize=True):
         self._placeRelative(fixX, fixY, fixWidth, fixHeight, xOffset, yOffset, xOffsetLeft, xOffsetRight, yOffsetUp, yOffsetDown, stickRight, stickDown, centerY, centerX, changeX, changeY, changeWidth, changeHeight, nextTo, updateOnResize)
         return self
     def _place(self, x, y, width, height, anchor):
@@ -2898,8 +2837,10 @@ class TreeViewElement:
         pass
     def setImage(self):
         pass
-    def setFg(self):
-        pass
+    def setFg(self, color:str | Color):
+
+
+        return self
     def getIndex(self):
         pass
     def getKeys(self):
@@ -2919,7 +2860,7 @@ class TreeView(Widget):
         elif isinstance(_master, self.__class__):
             self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self._data = {"master": _master,  "widget":ttk.Treeview(_master._get()), "headers":[], "elements":[]}
+            self._data = {"master": _master,  "widget":ttk.Treeview(_master._get()), "headers":[], "elements":[], "onHeaderClick":None, "use_index":False}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
@@ -2983,11 +2924,11 @@ class TreeView(Widget):
         self["headers"] = [str(i) for i in args]
         self._setAttribute("columns", self["headers"][1:])
         self["widget"].column("#0", stretch=False)
-        self["widget"].heading("#0", text=self["headers"][0], anchor="w")
-        for i in self["headers"][1:]:
-            self["widget"].column(i, stretch=False)
-            self["widget"].heading(i, text=i, anchor="w")
-    def addEntry(self, *args, index="end", image=None):
+        self["widget"].heading("#0", text=self["headers"][0], anchor="w", command=lambda a=self["headers"][0], b=0:self._clickHeader((a, b)))
+        for i, header in enumerate(self["headers"][1:]):
+            self["widget"].column(header, stretch=False)
+            self["widget"].heading(header, text=header, anchor="w", command=lambda a=header, b=1+i:self._clickHeader((a, b)))
+    def addEntry(self, *args, index="end", image=None, tag:str | tuple=None):
         if isinstance(image, TkImage) or isinstance(image, PILImage):
             image = image._get()
         if isinstance(args[0], tuple) or isinstance(args[0], list):
@@ -2996,10 +2937,28 @@ class TreeView(Widget):
             raise TKExceptions.InvalidHeaderException("Set Tree Headers first!")
         if len(self["headers"]) != len(list(args)):
             raise TKExceptions.InvalidHeaderException("Length of headers must be the same as args of addEntry!")
-        if image is not None: _id = self["widget"].insert(parent="", index=index, text=args[0], values=args[1:], image=image)
-        else: _id = self["widget"].insert(parent="", index=index, text=args[0], values=args[1:])
+
+        data = {
+            "text":args[0],
+            "values":args[1:]
+        }
+        if image is not None: data["image"] = image
+        if tag is not None:
+            if type(tag) == tuple:
+                data["tag"] = tag
+            else:
+                data["tag"] = (tag,)
+        _id = self["widget"].insert(parent="", index=index, **data)
         entry = TreeViewElement(self, _id)
         self["elements"].append(entry)
+        return self
+    def setBgColorByTag(self, tag:str, color:Color | str):
+        color = color.value if hasattr(color, "value") else color
+        self["widget"].tag_configure(tag, background=color)
+        return self
+    def setFgColorByTag(self, tag:str, color:Color | str):
+        color = color.value if hasattr(color, "value") else color
+        self["widget"].tag_configure(tag, foreground=color)
         return self
     def setEntry(self, *args, index=0):
         index = self._getIds()[index]
@@ -3037,8 +2996,18 @@ class TreeView(Widget):
             self["widget"].selection_remove(item)
         return self
     def see(self, index):
-        self["widget"].see(self._getIds()[index])
+        if len(self._getIds()) > index and len(self._getIds()):
+            self["widget"].see(self._getIds()[index])
         return self
+    def onSelectHeader(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False, useIndex=False):
+        self["onHeaderClick"] = EventHandler._getNewEventRunnable(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        self["use_index"] = useIndex
+        return self
+    def _clickHeader(self, hName):
+        if self["onHeaderClick"] is not None:
+            handler = self["onHeaderClick"]
+            handler.event["value"] = hName[0] if not self["use_index"] else hName[1]
+            handler()
     #TODO add length from subFolders!
     def length(self):
         return len(self._getIds())
@@ -3346,9 +3315,15 @@ class ContextMenu(Widget):
         return self["mainSubMenu"].createSubMenu(button, self["group"])
     def bindToWidget(self, widg):
         EventHandler._registerNewEvent(widg, self.open, self["eventType"], [], 1, decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
-    def open(self, loc:Location2D):
+    def open(self, loc:Location2D | Event):
         if isinstance(loc, Event):
-            loc = Location2D(loc.getValue())
+            if loc.getValue() is not None:
+                loc = Location2D(loc.getValue())
+            else:
+                loc = Location2D(
+                    loc.getTkArgs().x_root,
+                    loc.getTkArgs().y_root,
+                )
         loc.toInt()
         try:
             self["widget"].tk_popup(loc.getX(), loc.getY())
@@ -3573,7 +3548,6 @@ class CustomStyle:
     def getType(self):
         return self._data["widget"]._get().winfo_class()
 
-#finish
 class Canvas(Widget):
     def __init__(self, _master, group=None):
         if isinstance(_master, dict):
@@ -4011,9 +3985,9 @@ class MenuPage(Frame):
         self._menuData["active"] = True
         self.onShow(**kwargs)
         self._menuData["master"].updateDynamicWidgets()
-
     def openNextMenuPage(self, mp, **kwargs):
         self._menuData["active"] = False
+        self.onHide()
         self.placeForget()
         history = self._menuData["history"].copy()
         history.append(mp)
@@ -4021,9 +3995,9 @@ class MenuPage(Frame):
         mp._menuData["active"] = True
         mp.onShow(**kwargs)
         self._menuData["master"].updateDynamicWidgets()
-
     def openLastMenuPage(self):
         if len(self._menuData) > 1:
+            self.onHide()
             self.placeForget()
             newHistory = self._menuData["history"].copy()[:-1] # remove self
             history = newHistory[-1] # get new "self" -> last item
@@ -4034,20 +4008,12 @@ class MenuPage(Frame):
     def _onShow(self, **kwargs):
         self._menuData["active"] = True
         self.onShow(**kwargs)
-
     def isActive(self):
         return self._menuData["active"]
-
     def onShow(self, **kwargs):
         pass
-
     def onHide(self):
         pass
 
 Combobox = DropdownMenu
 Menu = TaskBar
-
-if __name__ == '__main__':
-    a = SimpleDialog.askUsernamePassword(None, title="passwordDialog", initialUname="raspberry", default="test")
-
-    print(a, type(a))
