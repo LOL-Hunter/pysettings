@@ -1,12 +1,13 @@
-import tkinter.simpledialog as simd
+﻿import tkinter.simpledialog as simd
 import tkinter.colorchooser as colorChooser
 import tkinter.messagebox as msg
 import tkinter.filedialog as fd
 import tkinter.font as _font
 import tkinter.ttk as ttk
+import tkinter.dnd as _dnd
 import tkinter as _tk_
 import threading as th
-from typing import Union, Callable, Iterable
+from typing import Union, Callable, Iterable, List
 from datetime import date
 from enum import Enum
 from traceback import format_exc
@@ -14,17 +15,177 @@ import random as r
 import time as t
 import string
 import os
-try:
-    from ..geometry import Location2D, _map, Rect
-    from ..text import MsgText, TextColor
-except ImportError:
-    from pysettings.geometry import Location2D, _map, Rect
-    from pysettings.text import MsgText, TextColor
 
-## TEMP ##
-from pysettings.text import TextColor
+
+#TODO parameter description in __init__
+#TODO parameter type in __init__
+#TODO event value in bind
+#TODO Remove pysettings.text package
+#TODO write description
+#TODO TextEntry.placeRelative implementation
 
 WIDGET_DELETE_DEBUG = False
+"""
+
+Master-Classes:
+Tk
+Toplevel
+Dialog
+
+Widgets:
+
+"""
+
+
+class Location2D:
+    def __init__(self, *args, **kwargs):
+        self.copy = self.clone
+        if len(args) == 0 and len(kwargs.values()) == 0:
+            self._coords = {"x":0, "y":0}
+        elif len(args) == 0:
+            self._coords = kwargs
+        else:
+            if len(args) == 2:
+                self._coords = {"x":args[0], "y":args[1]}
+            else:
+                args = args[0]
+                if isinstance(args, Location2D):
+                    self._coords = args._coords.copy()
+                elif type(args) == tuple and len(args) > 1:
+                    self._coords = {"x": args[0], "y": args[1]} # ((1, 2), )
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            item = ["x", "y"][item]
+        return self._coords[item]
+    def __setitem__(self, key, value):
+        self._coords[key] = value
+    def __eq__(self, other):
+        if isinstance(other, Location2D):
+            return other.get() == self.get()
+        elif isinstance(other, tuple):
+            return other == self.get()
+        else:
+            return False
+    def __ne__(self, other):
+        if isinstance(other, Location2D):
+            return other.get() != self.get()
+        elif isinstance(other, tuple):
+            return other != self.get()
+        else:
+            return True
+    def __add__(self, other):
+        return Location2D(self.getX()+other.getX(), self.getY()+other.getY())
+    def __repr__(self):
+        return "Location2D("+str(self["x"])+", "+str(self["y"])+")"
+    def __len__(self):
+        return 2
+    def toInt(self):
+        self._coords["x"] = int(self._coords["x"])
+        self._coords["y"] = int(self._coords["y"])
+        return self
+    @property
+    def x(self):
+        return self.getX()
+    @x.setter
+    def x(self, x):
+        self.setX(x)
+    @property
+    def y(self):
+        return self.getY()
+    @y.setter
+    def y(self, y):
+        self.setY(y)
+    def getX(self):
+        return self._coords["x"]
+    def getY(self):
+        return self._coords["y"]
+    def setX(self, x):
+        self._coords["x"] = x
+        return self
+    def setY(self, y):
+        self._coords["y"] = y
+        return self
+    def change(self, x=0.0, y=0.0):
+        if isinstance(x, Location2D): x, y = x.get()
+        self._coords["x"] = self.getX() + x
+        self._coords["y"] = self.getY() + y
+        return self
+    def get(self):
+        return tuple(self._coords.values())
+    def set(self, *L):
+        if len(L) == 1:
+            L = L[0]
+        if isinstance(L, Location2D):
+            x, y = L.get()
+        else:
+            x, y = L
+        self._coords["x"] = x
+        self._coords["y"] = y
+    def clone(self):
+        return Location2D(x=self.getX(), y=self.getY())
+    def toString(self, prefix=True):
+        if prefix:
+            return "X: "+str(self.getX())+"Y: "+str(self.getY())
+        else:
+            return str(self.getX()) + str(self.getY())
+def _map(value, iMin, iMax, oMin=None, oMax=None):
+    if oMin is None and oMax is None:
+        oMax = iMax
+        iMax = iMin
+        iMin = 0
+        oMin = 0
+    return int((value-iMin) * (oMax-oMin) / (iMax-iMin) + oMin)
+class Rect:
+    def __init__(self, loc1, loc2):
+        self.ratio = None
+        self.loc1 = loc1
+        self.loc2 = loc2
+    @staticmethod
+    def fromLocLoc(loc1:Location2D, loc2:Location2D):
+        return Rect(loc1, loc2)
+    @staticmethod
+    def fromLocWidthHeight(loc:Location2D, width:int|float=0, height:int|float=0):
+        return Rect(loc, loc.clone().change(x=width, y=height))
+    """@staticmethod
+    def fromTkWidget(w):
+        return Rect(w.)"""
+    def __repr__(self):
+        return "Rect("+str(self.loc1)+", "+str(self.loc2)+")"
+    @property
+    def width(self):
+        return self.getWidth()
+    @property
+    def height(self):
+        return self.getHeight()
+    @property
+    def size(self):
+        return self.getWidth(), self.getHeight()
+    def clone(self):
+        return Rect(self.loc1.clone(), self.loc2.clone())
+    def getLoc1(self):
+        return Location2D(min(self.loc1.getX(), self.loc2.getX()),  min(self.loc1.getY(), self.loc2.getY()))
+    def getWidth(self):
+        return max(self.loc1.getX(), self.loc2.getX()) - min(self.loc1.getX(), self.loc2.getX())
+    def getHeight(self):
+        return max(self.loc1.getY(), self.loc2.getY()) - min(self.loc1.getY(), self.loc2.getY())
+    def collisionWithPoint(self, loc):
+        return loc.getX() >= min(self.loc1.getX(), self.loc2.getX()) and loc.getX() <= max(self.loc1.getX(), self.loc2.getX()) and loc.getY() >= min(self.loc1.getY(), self.loc2.getY()) and loc.getY() <= max(self.loc1.getY(), self.loc2.getY())
+    def collisionWithRect(self, rect):
+        rect2 = Rect(Location2D(rect.loc1.getX()-self.getWidth(), rect.loc1.getY()-self.getHeight()), Location2D(rect.loc1.getX()+rect.getWidth(), rect.loc1.getY()+rect.getHeight()))
+        return rect2.collisionWithPoint(self.loc1)
+    def resizeToRectWithRatio(self, rect, offset=0, updateRatio=False, upLeftFix=True):
+        if updateRatio or self.ratio is None:
+            self.ratio = self.getWidth()/self.getHeight()
+        newWidth = rect.getWidth()-offset*2
+        newHeight = (1/self.ratio) * newWidth
+        if newHeight + offset*2 > rect.getHeight():
+            newHeight = rect.getHeight() - offset*2
+            newWidth = self.ratio * newHeight
+        if upLeftFix:
+            self.loc2 = Location2D(self.loc1.getX()+newWidth, self.loc1.getY()+newHeight)
+        else:
+            self.loc1 = Location2D(rect.loc1.getX()+offset, rect.loc1.getY()+offset)
+            self.loc2 = Location2D(rect.loc1.getX()+newWidth, rect.loc1.getY()+newHeight)
 
 class TKExceptions:
     class InvalidFileExtention(Exception):
@@ -42,6 +203,10 @@ class TKExceptions:
     class BindException(Exception):
         pass
 class Symbol:
+    """
+    Example Symbol collection.
+    """
+    #TODO: add more symbol-codes
     DICE_1 = "\u2680"
     DICE_2 = "\u2681"
     DICE_3 = "\u2682"
@@ -49,11 +214,21 @@ class Symbol:
     DICE_5 = "\u2684"
     DICE_6 = "\u2685"
 class FontType(Enum):
+    """
+    FontTypes enum
+    """
+    #TODO: add more font types
     ARIAL ="arial"
 class Orient(Enum):
+    """
+    Enum to specify the Orientation
+    """
     HORIZONTAL = "horizontal"
     VERTICAL = "vertical"
 class Style(Enum):
+    """
+    Enum to specify widget style.
+    """
     FLAT = "flat"
     SOLID = "solid"
     RAISED = "raised"
@@ -61,6 +236,9 @@ class Style(Enum):
     GROOVE = "groove"
     RIDGE = "ridge"
 class Anchor(Enum):
+    """
+    Enum to specify the Anchor.
+    """
     NW = UP_LEFT = "nw"
     NE = UP_RIGHT = "ne"
     SW = DOWN_LEFT = "sw"
@@ -89,17 +267,11 @@ class Color(Enum):
     MAGENTA = "magenta"
     ORANGE = "#CB772F"
     @staticmethod
-    def rgb(r, g, b):
+    def rgb(r:int, g:int, b:int):
         return '#%02x%02x%02x' % (r, g, b)
     @staticmethod
     def hex(hex:str):
         return hex
-    @staticmethod
-    def randomRGB():
-        return Color.rgb(r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
-    @staticmethod
-    def randomColor():
-        return r.choice(list(Color))
 class Wrap(Enum):
     NONE = "none"
     WORD = "word"
@@ -135,6 +307,7 @@ class Cursor(Enum):
     CUSTOM_STAR = "star"
     CUSTOM_TARGET = "target"
     CUSTOM_TRECK = "trek"
+
 class Key(Enum):
     SHIFT = "<Shift>"
     RETURN = "<Return>"
@@ -287,10 +460,10 @@ class EventType(Enum):
         if k3 is not None and not isinstance(k2, FunctionKey): raise ValueError("if k3 is not None then k2 must be instance of 'FunctionKey'!")
         return "<"+(k1.value if hasattr(k1, "value") else k1)+"-"+(k2.value if hasattr(k2, "value") else k2)+("-"+(k3.value if hasattr(k3, "value") else k3) if k3 is not None else "")+">"
 
-class Cmd:
+class CustomRunnable:
     """
     Custom Runnable.
-
+    It forces to pass exactly the augments that are given to the __init__.
     """
     def __init__(self, command, *args, **kwargs):
         self.args = args
@@ -300,11 +473,18 @@ class Cmd:
         self.command(*self.args, **self.kwargs)
 
 class PILImage:
+    """
+    Pillow image adapter for tkinter.
+    Use 'PILImage.loadImage(<path>)' to load image from string path.
+    Or use 'PILImage.loadImageFromPIL(<path>)' to load image from PIL.Image object.
+    Used for advanced image progression.
+    Package 'PIL.Image' have to be installed.
+    """
     def __init__(self, image):
         import PIL.Image as Image
         self.copy = self.clone # redundant method
         self._preRenderedImage = None
-        self._pilImage = Image # cuz pil.image must exist in whole class!
+        self._pilImage = Image # save pil.image from import!
         self._useOrg = False
         if isinstance(image, str):
             self._image = self._pilImage.open(image)
@@ -313,14 +493,12 @@ class PILImage:
         else:
             raise TKExceptions.InvalidUsageException("Use 'Image.loadImage(<path>)' instead! Not:"+str(type(image)))
         self._original = self._image.copy()
-
     def __del__(self):
         self._original.close()
         self._image.close()
         del self._pilImage
-
     @staticmethod
-    def loadImage(path):
+    def loadImage(path:str):
         if os.path.exists(path):
             return PILImage(path)
         else:
@@ -328,25 +506,52 @@ class PILImage:
     @staticmethod
     def loadImageFromPIL(image):
         return PILImage(image)
-    def clone(self, orginal=False):
-        return PILImage(self._image.copy() if not orginal else self._original.copy())
+    def clone(self, useOriginal=False):
+        """
+        Copys the image and returns a new image instance.
+        @param orginal: if the original image should be taken.
+        @return:
+        """
+        return PILImage(self._image.copy() if not useOriginal else self._original.copy())
     def toOriginal(self):
-        self._image = self._original
+        """
+        Resets the Image to original.
+        @return:
+        """
+        self._image = self._original.copy()
         return self
-    def resizeToIcon(self, useOriginal=True):
+    def resizeToIcon(self, useOriginal=False):
+        """
+        Resizes the image to default 16x16 icon size.
+        @param useOriginal: if the original image should be taken.
+        @return:
+        """
         #256x256
         if useOriginal:
             self._image = self._original.resize((16, 16))
         else:
             self._image = self._image.resize((16, 16))
         return self
-    def resize(self, fac, useOriginal=True):
+    def resize(self, fac:float, useOriginal=False):
+        """
+        Resizes the image with given factor.
+        @param fac: factor for resize
+        @param useOriginal: if the original image should be taken.
+        @return:
+        """
         if useOriginal:
             self._image = self._original.resize((int(round(self._original.width * fac, 0)), int(round(self._original.height * fac, 0))))
         else:
             self._image = self._image.resize((int(round(self._image.width * fac, 0)), int(round(self._image.height * fac, 0))))
         return self
-    def resizeTo(self, x, y=None, useOriginal=True):
+    def resizeTo(self, x, y=None, useOriginal=False):
+        """
+        Resizes the image to fix size.
+        @param x: int or Location2D instance
+        @param y: int or None
+        @param useOriginal: if the original image should be taken.
+        @return:
+        """
         if isinstance(x, Rect):
             x, y = x.getWidth(), x.getHeight()
         x = int(round(x, 0))
@@ -356,17 +561,37 @@ class PILImage:
         else:
             self._image = self._image.resize((x, y))
         return self
-    def crop(self, loc:Location2D, loc2:Location2D, useOriginal=True):
+    def crop(self, loc:Location2D, loc2:Location2D, useOriginal=False):
+        """
+        Crops a square out of the image.
+        @param loc: Location2D instance representing the first location
+        @param loc2: Location2D instance representing the second location
+        @param useOriginal: if the original image should be taken.
+        @return:
+        """
         if useOriginal:
             self._image = self._original.crop((*loc.get(), *loc2.get()))
         else:
             self._image = self._image.crop((*loc.get(), *loc2.get()))
         return self
     def getWidth(self):
+        """
+        Returns the current width of the image.
+        @return:
+        """
         return self._image.width
     def getHeight(self):
+        """
+        Returns the current width of the image.
+        @return:
+        """
         return self._image.height
     def preRender(self):
+        """
+        Converts the image to tkinter image.
+        Call this earlyer in your code if an image error occurs.
+        @return:
+        """
         import PIL.ImageTk as imgTk
         self._preRenderedImage = imgTk.PhotoImage(self._image)
         return self
@@ -381,28 +606,53 @@ class PILImage:
     def _getPIL(self):
         return self._image
 class TkImage:
+    """
+    Default tkinter image adapter.
+    Use 'TkImage.loadImage(<path>)' to load image from string path.
+    """
     def __init__(self, image:_tk_.PhotoImage):
         if isinstance(image, _tk_.PhotoImage):
             self.image = image
         else:
             raise TKExceptions.InvalidUsageException("Use 'Image.loadImage(<path>)' instad! Not:" + str(type(image)))
     @staticmethod
-    def loadImage(path):
+    def loadImage(path:str):
         if os.path.exists(path):
             return TkImage(_tk_.PhotoImage(file=path))
         else:
             raise TKExceptions.PathNotExisits("This path does not Exists: " + str(path))
     def resize(self, f:int):
+        """
+        Resizes the image using the tkinter 'subsample' method.
+        @param f:
+        @return:
+        """
         self.image = self.image.subsample(f)
     def getWidth(self):
+        """
+        Returns the current width of the image.
+        @return:
+        """
         return int(self.image["width"])
     def getHeight(self):
+        """
+        Returns the current width of the image.
+        @return:
+        """
         return int(self.image["height"])
     def _get(self, o=None):
         return self.image
 
 class Event:
+    """
+    Event class.
+    Do not instantiate this class by yourself.
+    The instance is passed by every bound function.
+    It provides all nessesary values and information.
+    """
     def __init__(self, dic=None, **kwargs):
+        # feature deprecated
+        assert dic is None, "Event cannot be casted!"
         if dic is None:
             self._data = {"afterTriggered":None,
                           "setCanceled": False,
@@ -418,8 +668,7 @@ class Event:
                           "decryptValueFunc":None,
                           "forceReturn":None,
                           "handler":None,
-                          "pos":None,
-                          "setTkEventCanceled":False
+                          "pos":None
                           }
         else:
             self._data = dic._data
@@ -430,51 +679,101 @@ class Event:
         func = f"'{'' if not hasattr(self._data['func'], '__self__') else self._data['func'].__self__.__class__.__name__ + '.'}{self._data['func'] if not hasattr(self._data['func'], '__name__') else self._data['func'].__name__}'"
         return f"Event({{func: {func}, args:"+str(self["args"])+", priority:"+str(self["priority"])+", setCanceled:"+str(self["setCanceled"])+"})"
     def __del__(self):
-        self._data.clear()
+        if hasattr(self, "_data"):
+            self._data.clear()
     def __call__(self):
         if self["handler"] is None:
             return
         return self["handler"]()
     def __getitem__(self, item):
-        if item == "widget" and "widget" not in self._data.keys():
-            print(self._data)
         return self._data[item]
     def __setitem__(self, key, value):
         self._data[key] = value
     def __lt__(self, other):
         return self["priority"] < other["priority"]
     def getTkArgs(self):
+        """
+        Returns the default tkinter event class.
+        @return:
+        """
         return self["tkArgs"]
     def setCanceled(self, b:bool=True):
+        """
+        Cancels the event.
+        This works NOT for all events.
+        @param b:
+        @return:
+        """
         self["setCanceled"] = b
     def getWidget(self):
+        """
+        Returns the widget which called the event.
+        @return:
+        """
         return self["widget"]
     def getValue(self):
+        """
+        Returns the selected Item or None.
+        This works NOT for all events.
+        @return:
+        """
         return self["value"]
     def getPos(self)->Location2D:
+        """
+        Returns the mouse posistion when available through tkinter event.
+        @return:
+        """
         return self["pos"]
-    def getScrollDelta(self):
+    def getScrollDelta(self)->Union[float, None]:
+        """
+       Returns the mouse scroll delta posistion when available through tkinter event.
+       @return:
+       """
         return self["tkArgs"].delta if hasattr(self["tkArgs"], "delta") else None
     def getArgs(self, i=None):
+        """
+        Returns the on bound specifyed Args.
+
+        @param i: If args is a list returns the index i from that list.
+        @return:
+        """
         if self["args"] is None: return None
         if type(i) is int: return self["args"][i]
         return self["args"]
     def getEventType(self):
+        """
+        Returns bound EventType.
+        @return:
+        """
         return self["eventType"]
     def getKey(self):
+        """
+        If event type is any kind of keyboard event, this method returns the pressed key which triggered the event.
+        @return:
+        """
         return self.getTkArgs().keysym
-    def isKey(self, k):
+    def isKey(self, k)->bool:
+        """
+        Checks if specific key was pressed.
+        @param k:
+        @return:
+        """
         k = k.value if hasattr(k, "value") else k
         k = k.replace("<", "").replace(">", "")
         if not hasattr(self.getTkArgs(), "keysym"): return False
         return k == self.getTkArgs().keysym
-    def setTkEventCanceled(self, b:bool=True):
-        self["setTkEventCanceled"] = b
-    def info(self):
+    def printEventInfo(self):
+        """
+        Returns info about current event.
+        @return:
+        """
         print("This Event[type: "+self["eventType"]+"] was triggered by "+str(type(self["widget"]))+"! | Args:"+str(self["args"]))
-class ScrollBarEvent(Event):
-    pass
 class _EventRegistry:
+    """
+    Private event implementation.
+    Handles event priorities.
+    Used for debugging events.
+    """
     def __init__(self, ins):
         if isinstance(ins, Widget) or isinstance(ins, Tk) or isinstance(ins, CanvasObject):
             self._data = {"event":{}, "widget":ins} # event : { type_ : ( <type:_EventHandler>, [<type:Event>, ...] ) }
@@ -486,10 +785,8 @@ class _EventRegistry:
             raise TKExceptions.InvalidWidgetTypeException("ins must be " + str(self.__class__.__name__) + " instance not: " + str(ins.__class__.__name__))
     def __repr__(self):
         return str(self.__class__.__name__)+"("+str(self._data)+")"
-
     def __del__(self):
         self._data.clear()
-
     def __getitem__(self, item):
         return self._data[item]
     def __setitem__(self, key, value):
@@ -500,8 +797,6 @@ class _EventRegistry:
             print("-EventType: "+k+":")
             for event in v[1]:
                 print(" -bind to: "+event["func"].__name__)
-    def rawCallable(self):
-        return None
     def addEvent(self, event, type_):
         handler = None
         if type_ in self["event"].keys(): # add Event
@@ -509,9 +804,9 @@ class _EventRegistry:
             self["event"][type_][1].sort()
             self["event"][type_][1].reverse()
         else:                             # new event type
-            handler = EventHandler(event)
+            handler = _EventHandler(event)
             self["event"][type_] = (handler, [event])
-        if EventHandler.DEBUG:
+        if _EventHandler.DEBUG:
             print(self["event"][type_][0])
         return handler
     def getRegisteredEvents(self, type_):
@@ -528,19 +823,19 @@ class _EventRegistry:
         if hasattr(type_, "value"):
             eventType = type_.value
         if type_ in self["event"].keys():
-            _e = Event(self["event"][type_][0].event)
-            _e.getWidget()._get().unbind(_e.getEventType())
+            _event = self["event"][type_][0].event
+            _event.getWidget()._get().unbind(_event.getEventType())
             self["event"].pop(type_)
     def unregisterAll(self):
         for i in self["event"].values():
-            _e = Event(i[0].event)
+            _event = i[0].event
             try:
-                _e.getWidget()._get().unbind(_e.getEventType())
+                _event.getWidget()._get().unbind(_event.getEventType())
             except:
 
                 pass
         self["event"] = {}
-class EventHandler:
+class _EventHandler:
     DEBUG = False
     #OLD:  _Events = {} #save in Individual instance! { <obj_id> : <type: _EventHandler> }
     def __init__(self, event):
@@ -548,19 +843,20 @@ class EventHandler:
         self.event = event
         #print(self.event.getWidget()["registry"], self.event.getWidget())
     def __repr__(self):
-        return "EventHandler("+"{widgetType:\""+self.event["widget"].getType().__name__+"\", eventType:"+str(self.event["eventType"])+", ID:"+self.event["widget"]["id"]+"}) bind on: \n\t-"+"\n\t-".join([str(i) for i in self.event["widget"]["registry"].getRegisteredEvents(self.event["eventType"])])
+        return "EventHandler("+"{widgetType:\""+type(self.event["widget"]).__name__+"\", eventType:"+str(self.event["eventType"])+", ID:"+self.event["widget"]["id"]+"}) bind on: \n\t-"+"\n\t-".join([str(i) for i in self.event["widget"]["registry"].getRegisteredEvents(self.event["eventType"])])
     def __getitem__(self, item):
         return self.event[item]
     def __setitem__(self, key, value):
         self.event[key] = value
     def __call__(self, *args):
+        #print("Args:", type(args[0]))
         if self.event is None: return
         def raiseError():
             exc = format_exc()
             info = f"""
 # Could not call bound function!
 # BindTo:    '{"" if not hasattr(event["func"], "__self__") else event["func"].__self__.__class__.__name__ + "."}{event["func"] if not hasattr(event["func"], "__name__") else event["func"].__name__}'
-# Widget:    '{event["widget"].getType().__name__}'
+# Widget:    '{type(event["widget"]).__name__}'
 # EventType: {event["eventType"]}
 # priority:  {event["priority"]}
 # args:      {event["args"]}
@@ -576,12 +872,10 @@ class EventHandler:
         args = args[0] if len(args) == 1 else list(args)
         event = None
         out = None
-        cancTk = False
-        #print(self.event._data)
+        if "widget" not in self.event._data.keys(): return #  event already dropped
         for event in self.event["widget"]["registry"].getCallables(self.event["eventType"]): #TODO get only the output of the last called func. problem? maybe priorities
             func = event["func"]
             event["tkArgs"] = args
-            if event["setTkEventCanceled"]: cancTk = True
             if event["decryptValueFunc"] is not None:
                 event["value"] = event["decryptValueFunc"](args) #TODO event in 'decryptValueFunc'
                 if event["value"] == "CANCEL":
@@ -591,32 +885,21 @@ class EventHandler:
                     if hasattr(args, "x") and hasattr(args, "y"):
                         event["pos"] = Location2D(args.x, args.y)
                 args = event
+            # call event
             if ((not hasattr(func, "__code__")) or ("self" in func.__code__.co_varnames and func.__code__.co_argcount > 1) or ("self" not in func.__code__.co_varnames and func.__code__.co_argcount > 0)) and not event["disableArgs"]:
-
-                try:
-                    out = func(args)
-                except:
-                    raiseError()
+                try: out = func(args)
+                except: raiseError()
             else:
-                try:
-                    out = func()
-                except:
-                    raiseError()
-            if not len(event._data): return False # destoyed
+                try: out = func()
+                except: raiseError()
+            if not len(event._data): return False # destroyed
             if event["afterTriggered"] is not None: event["afterTriggered"](event, out)
-        #print("AFTER CALLED", self.event._data)
-        if event is None: return
-        if event["forceReturn"] is None:
-            if event["setTkEventCanceled"]:
-                if cancTk: return "break"
-                else: return out
-            #if event["forceReturn"]:
-            #    return event["forceReturn"]
-            #else: return out
-        else: return event["forceReturn"]
+        # After all events are processed
+        if event["forceReturn"] is not None:
+            return event["forceReturn"]
     @staticmethod
     def setEventDebug(b:bool):
-        EventHandler.DEBUG = b
+        _EventHandler.DEBUG = b
     @staticmethod
     def printAllBinds(widget):
         widget["registry"].printAllBinds()
@@ -652,7 +935,7 @@ class EventHandler:
             except:
                 func = f"'{'' if not hasattr(func, '__self__') else func.__self__.__class__.__name__ + '.'}{func if not hasattr(func, '__name__') else func.__name__}'"
                 raise TKExceptions.BindException(f"Could not bind event type '{eventType}' to func {func}!")
-        event["handler"] = EventHandler(event)
+        event["handler"] = _EventHandler(event)
         return event
     @staticmethod
     def _registerNewCommand(obj, func, args:Union[list, None], priority:int, decryptValueFunc=None, defaultArgs=False, disableArgs=False, onlyGetRunnable=False, cmd="command"):
@@ -670,7 +953,7 @@ class EventHandler:
         if not onlyGetRunnable:
             if handler is not None:
                 obj._get()[cmd] = handler
-            event["handler"] = EventHandler(event)
+            event["handler"] = _EventHandler(event)
 
         else:
             return handler
@@ -692,7 +975,7 @@ class EventHandler:
         if handler is not None:
             obj["widget"]["validate"] = type_
             obj["widget"]["validatecommand"] = (obj["master"]._get().register(handler), '%P')
-        event["handler"] = EventHandler(event)
+        event["handler"] = _EventHandler(event)
     @staticmethod
     def _registerNewTracer(obj, var, func, args:list, priority:int, decryptValueFunc=None, defaultArgs=False, disableArgs=False):
         assert isinstance(func, Callable), "tracer bound Func is not callable " + str(type(func)) + " instead!"
@@ -708,7 +991,7 @@ class EventHandler:
         handler = obj["registry"].addEvent(event, "trace")
         if handler is not None:
             var.trace("w", handler)
-        event["handler"] = EventHandler(event)
+        event["handler"] = _EventHandler(event)
     @staticmethod
     def _getNewEventRunnable(obj, func, args, priority:int, decryptValueFunc=None, defaultArgs=False, disableArgs=False, after=None):
         assert isinstance(func, Callable), "Runnable bound Func is not callable " + str(type(func)) + " instead!"
@@ -726,7 +1009,7 @@ class EventHandler:
         if handler is not None:
             event["handler"] = handler
         else:
-            event["handler"] = EventHandler(event)
+            event["handler"] = _EventHandler(event)
         return event["handler"]
     @staticmethod
     def _registerNewCustomEvent(obj, func, eventType:Union[EventType, Key, Mouse], args, priority: int, decryptValueFunc=None, defaultArgs=False, disableArgs=False, after=None):
@@ -745,11 +1028,11 @@ class EventHandler:
         event["eventType"] = eventType
         handler = obj["registry"].addEvent(event, eventType)
         eventType = eventType.value if hasattr(eventType, "value") else eventType
-        event["handler"] = EventHandler(event)
+        event["handler"] = _EventHandler(event)
 
 
         if eventType == "[relative_update]" or eventType == "[relative_update_after]":
-            obj["placeRelData"]["handler"] = EventHandler(event)
+            obj["placeRelData"]["handler"] = _EventHandler(event)
 
 
         return handler
@@ -770,8 +1053,8 @@ class EventHandler:
         handler = obj["registry"].addEvent(event, eventType)
         if handler is not None:
             obj._get().tag_bind(id_, eventType, handler)
-        event["handler"] = EventHandler(event)
-class TaskScheduler:
+        event["handler"] = _EventHandler(event)
+class _TaskScheduler:
     def __init__(self, _master, delay, func, repete=False, dynamic=False):
         if hasattr(_master, "_get"):
             self._id = None
@@ -782,18 +1065,17 @@ class TaskScheduler:
             self._dynamic = dynamic
         else:
             raise TKExceptions.InvalidWidgetTypeException("WidgetType must be any 'tkWidget' or 'Tk' not:"+str(type(_master)))
-    def start(self):
-        self._id = self._master._get().after(int(self._delay*1000), self)
-        return self
     def __call__(self):
         f = t.time()
         self._func()
         if self._repete:
             self._id = self._master._get().after(self._delay*1000 if not self._dynamic else self._delay-(t.time()-f) if self._delay-(t.time()-f) > 0 else 0, self)
-
+    def start(self):
+        self._id = self._master._get().after(int(self._delay*1000), self)
+        return self
     def cancel(self):
         if self._id is not None: self._master._get().after_cancel(self._id)
-class IntVar:
+class _IntVar:
     def __init__(self, _master):
         self.index = -1
         self.command = None
@@ -840,6 +1122,7 @@ class Tk:
         self.title = self.setTitle
         self.quit = self.quitMainLoop
         self.withdraw = self.hide
+        self.setBackgroundColor = self.setBg
         if _master is None:
             self._data = {"master": _tk_.Tk(), "registry":_EventRegistry(self), "placeRelData":{"handler":None}, "isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "setSize":(),  "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}, "closeRunnable":None, "title":""}
 
@@ -862,34 +1145,27 @@ class Tk:
     def __del__(self):
         pass
         #print("__DELETE__", type(self))
-    def getType(self):
-        return type(self)
-    def runTask(self, func):
-        task = TaskScheduler(self, 0, func)
-        task._id = self["master"].after(0, task)
+    def runTask(self, func)->_TaskScheduler:
+        task = _TaskScheduler(self, 0, func)
         return task
-    def runTaskAfter(self, func, time):
-        task = TaskScheduler(self, time, func)
-        task._id = self["master"].after(int(time * 1000), task)
+    def runTaskAfter(self, func, time)->_TaskScheduler:
+        task = _TaskScheduler(self, time, func)
         return task
-    def runIdleLoop(self, func):
-        task = TaskScheduler(self, 0, func, repete=True)
-        task._id = self["master"].after(0, task)
+    def runIdleLoop(self, func)->_TaskScheduler:
+        task = _TaskScheduler(self, 0, func, repete=True)
         return task
-    def runDelayLoop(self, func, delay):
-        task = TaskScheduler(self, delay, func, repete=True)
-        task._id = self["master"].after(0, task)
+    def runDelayLoop(self, func, delay)->_TaskScheduler:
+        task = _TaskScheduler(self, delay, func, repete=True)
         return task
-    def runDynamicDelayLoop(self, delay, func):
-        task = TaskScheduler(self, delay, func, repete=True, dynamic=True)
-        task._id = self["master"].after(0, task)
+    def runDynamicDelayLoop(self, delay, func)->_TaskScheduler:
+        task = _TaskScheduler(self, delay, func, repete=True, dynamic=True)
         return task
-    def getWindowActive(self):
+    def getWindowActive(self)->bool:
         return self["isRunning"]
     def throwErrorSound(self):
         self["master"].bell()
     def onWindowResize(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False, filterEvent=True):
-        EventHandler._registerNewEvent(self, func, EventType.key("<Configure>"), args, priority, decryptValueFunc=(self._decryptWindowResize if filterEvent else self._decryptNonFilteredWindowResize), defaultArgs=defaultArgs, disableArgs=disableArgs)
+        _EventHandler._registerNewEvent(self, func, EventType.key("<Configure>"), args, priority, decryptValueFunc=(self._decryptWindowResize if filterEvent else self._decryptNonFilteredWindowResize), defaultArgs=defaultArgs, disableArgs=disableArgs)
     def copyToClip(self, s):
         self["master"].clipboard_append(str(s))
         return self
@@ -899,20 +1175,47 @@ class Tk:
     def getClip(self):
         return self["master"].clipboard_get()
     def setFocus(self):
+        """
+        Sets the focus to this Window.
+
+        @return:
+        """
         self["master"].focus_set()
         return self
     def forceFocus(self):
+        """
+        Forces the focus to this WIndow.
+        @return:
+        """
         self["master"].focus_force()
         return self
-
     def hide(self):
+        """
+        Minimizees the Window.
+        @return:
+        """
         self["master"].withdraw()
     def show(self):
+        """
+        Maximizes the Window.
+        @return:
+        """
         self["master"].deiconify()
     def setIcon(self, icon:Union[TkImage, PILImage]):
+        """
+        Sets the icon in the top left corner from the Window.
+
+        @param icon:
+        @return:
+        """
         self["master"].iconphoto(True, icon._get())
         return self
     def sleep(self, s):
+        """
+        Sleeps s seconds and updates the window in Background.
+        @param s:
+        @return:
+        """
         temp = t.time()
         while True:
             if not self["destroyed"]: self.update()
@@ -920,6 +1223,10 @@ class Tk:
                 break
         return self
     def lift(self):
+        """
+        Lifts the Window on top of all other Windows.
+        @return:
+        """
         self["master"].lift()
         return self
     def closeViaESC(self):
@@ -941,43 +1248,95 @@ class Tk:
     #def bindToWidgetType(self, func, eventType:Union[EventType, Key, Mouse], event, args:list=None, defaultArgs=False, disableArgs=False):
         #_EventHandler.registerNewEvent(self, func, event.__name__, args, defaultArgs=defaultArgs, disableArgs=disableArgs, bindFunc="bind_class")
     def bind(self, func:Callable, event:Union[EventType, Key, Mouse, str], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        """
+        Binds a specific event to the Window. Runs given function on trigger.
+
+        @param func: function get called on trigger
+        @param event: Event type: EventType enum or default tkinter event as string.
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
         if event == "CANCEL": return
         if hasattr(event, "value"):
             event = event.value
         if event.startswith("["):
-            EventHandler._registerNewCustomEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+            _EventHandler._registerNewCustomEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
         else:
-            EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+            _EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
     #def bindAll(self, func, event: Union[EventType, Key, Mouse], args: list=None, priority:int=0, defaultArgs=False, disableArgs=False):
         #EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, bindFunc="bind_all")
     def unbindEvent(self, event:Union[EventType, Key, Mouse]):
-        self["registry"].unregisterType(event)
+        """
+        Unbinds all Events from given EventType.
+
+        @param event:
+        @return:
+        """
+        #self["registry"].unregisterType(event)
+        raise NotImplemented()
     def unbindAllEvents(self):
-        self["registry"].unregisterAll()
+        """
+        Unbind all Events.
+
+        @return:
+        """
+        #self["registry"].unregisterAll()
+        raise NotImplemented()
     def getMousePosition(self):
         """
         Returns the current mouse position on the TK window.
         @return:
         """
         return Location2D(self["master"].winfo_pointerx() - self["master"].winfo_rootx(), self["master"].winfo_pointery() - self["master"].winfo_rooty())
-        #return Location2D(self["master"].winfo_pointerx(), self["master"].winfo_pointery())
     def getWidgetFromTk(self, w):
         for widg in self._getAllChildWidgets(self):
             pass
+        raise NotImplemented()
     def getWidgetFromLocation(self, loc:Location2D):
         #for widget in self._getAllChildWidgets(self):
         #    if widget._get()
         #print(*loc.get())
-        widget = self["master"].winfo_containing(*loc.get())
-        return widget
-    def setCursor(self, c:Cursor):
+        #widget = self["master"].winfo_containing(*loc.get())
+        #return widget
+        raise NotImplemented()
+    def setCursor(self, c:Union[Cursor, str]):
+        """
+        Set cursor image from Cursor enum or default tkinter string.
+
+        @note only predefined cursors are implented yet
+        @param c:
+        @return:
+        """
         self["master"]["cursor"] = c.value if hasattr(c, "value") else c
-    def hideCursor(self, b=True):
-        if b: self["master"]["cursor"] = "none"
+        return self
+    def hideCursor(self):
+        """
+        Hides the current Cursor within the Window.
+        Use 'setCursor' to show the Cursor
+
+        @return:
+        """
+        self["master"]["cursor"] = "none"
+        return
     def clearAllWidgets(self):
-        for i in self["master"].winfo_children():
-            i.destroy()
+        """
+        Destroys all Widgets in the Window.
+
+        @return:
+        """
+        #for i in self["master"].winfo_children():
+        #    i.destroy()
+        raise NotImplemented()
     def centerWindowOnScreen(self, forceSetSize=False):
+        """
+        Centers the Window on screen
+
+        @param forceSetSize: get the Parameters from 'setWindowSize' function and not from tkinter
+        @return:
+        """
         width, height = self.getWindowSize()
         if width == 1 or forceSetSize:
             if len(self["setSize"]) == 2:
@@ -990,7 +1349,11 @@ class Tk:
         self.setPositionOnScreen(nwidth, nheight)
         return self
     def destroy(self):
-        #print("destroy Tk!")
+        """
+        Destroys the Tkinter Window. Ignores the 'onCloseEvent'.
+
+        @return:
+        """
         try:
             self["destroyed"] = True
             WidgetGroup.removeFromAll(self)
@@ -1002,24 +1365,54 @@ class Tk:
             return True
 
         except Exception as e:
-            if WIDGET_DELETE_DEBUG:
+            if WIDGET_DELETE_DEBUG or True:
                 print("FAIL!", e)
-                TextColor.print(format_exc(), "red")
+                print(format_exc())
             return False
     def update(self):
+        """
+        Updates the Window.
+
+        @return:
+        """
         self["master"].update()
     def updateIdleTasks(self):
+        """
+        Updates the IDLE-Tasks.
+
+        @return:
+        """
         self["master"].update_idletasks()
     def activeWidgets(self): #@TODO: FIX!
-        for i in self["master"].winfo_children():
-            yield i
+        #for i in self["master"].winfo_children():
+        #    yield i
+        raise NotImplemented()
     def setCloseable(self, b:bool):
+        """
+        If b is True -> Window cannot be closed
+        If b is False -> Window can normally closed
+
+        @param b:
+        @return:
+        """
         self["master"].protocol("WM_DELETE_WINDOW", b)
     def setTitle(self, title):
+        """
+        Sets the Window title.
+
+        @param title:
+        @return:
+        """
         self["title"] = title
         self["master"].title(title)
         return self
-    def setTransparent(self, color):
+    def setTransparent(self, color:Union[Color, str]):
+        """
+        Defines given color as Transparent.
+
+        @param color:
+        @return:
+        """
         color = color.value if hasattr(color, "value") else color
         self["master"].wm_attributes("-transparentcolor", color)
         return self
@@ -1028,13 +1421,39 @@ class Tk:
     def overrideredirect(self, b=True):
         self["master"].overrideredirect(b)
     def setTopmost(self, b=True):
+        """
+        Sets the "Always on top" attribute.
+
+        @param b:
+        @return:
+        """
         self["master"].wm_attributes("-topmost", b)
     def setResizeable(self, b:bool):
+        """
+        Defines if the Window can be resized.
+
+        @param b:
+        @return:
+        """
         self["master"].resizable(b, b)
         return self
     def setFullscreen(self, b:bool):
+        """
+        Sets the Window in Fullscreen mode.
+
+        @param b:
+        @return:
+        """
         self["master"].wm_attributes("-fullscreen", b)
-    def setPositionOnScreen(self, x, y=None):
+    def setPositionOnScreen(self, x:Union[int, Location2D], y:Union[None, int]=None):
+        """
+        Set the Window position of the upper left corner on screen.
+
+
+        @param x:
+        @param y:
+        @return:
+        """
         if isinstance(x, Location2D):
             x, y = x.get()
         elif y is None:
@@ -1067,31 +1486,96 @@ class Tk:
         def after(e, out):
             if not e["setCanceled"]:
                 self.destroy()
-        self["closeRunnable"] = EventHandler._getNewEventRunnable(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        self["closeRunnable"] = _EventHandler._getNewEventRunnable(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self["closeRunnable"]
-    def setBg(self, col):
+    def setBg(self, col:Union[Color, str]):
+        """
+        Set the Background Color of the Window.
+
+        @param col: Use Color enum, tkinter string or hex-code.
+        @return:
+        """
         self["master"]["bg"] = col.value if hasattr(col, "value") else col
+        return self
     def getHeight(self):
+        """
+        Returns the Window height.
+
+        @return:
+        """
         return self["master"].winfo_height()
     def getWidth(self):
+        """
+        Returns the Window width.
+
+        @return:
+        """
         return self["master"].winfo_width()
     def getScreenSize(self):
+        """
+        Returns the Screen width and height as tuple.
+
+        @return:
+        """
         return self["master"].winfo_screenwidth(), self["master"].winfo_screenheight()
     def getWindowSize(self):
+        """
+        Returns the Window width and height as tuple.
+
+        @return:
+        """
         return self["master"].winfo_width(), self["master"].winfo_height()
     def setWindowSize(self, x:int, y:int, minsize=False):
+        """
+        Set the Windowsize. Can also set the 'minsize'.
+
+        @param x:
+        @param y:
+        @param minsize:
+        @return:
+        """
         self["setSize"] = (x, y)
         if minsize: self.setMinSize(x, y)
         self["master"].geometry(str(x) + "x" + str(y))
     def setMaxSize(self, x, y):
+        """
+        Set the maximal Windowsize.
+
+        @param x:
+        @param y:
+        @return:
+        """
         self["master"].maxsize(x, y)
     def setMinSize(self, x, y):
+        """
+        Set the minimum Windowsize.
+
+        @param x:
+        @param y:
+        @return:
+        """
         self["master"].minsize(x, y)
     def quitMainLoop(self):
+        """
+        Quit the Window. BUT the Window mainloop is still running.
+
+        @return:
+        """
         self["master"].quit()
     def mainloop(self):
+        """
+        Starts the Window mainloop.
+        Call this Method after the creation of all Widgets to open/start the Window.
+        All code after the mainloop is only executed if the Window is terminated.
+
+        @return:
+        """
         self._mainloop()
     def _mainloop(self):
+        """
+        Private Implementations of 'mainloop' call.
+        @return:
+        """
         if self["destroyed"]: return
         self._finishLastTasks()
         self["isRunning"] = True
@@ -1099,6 +1583,11 @@ class Tk:
         self["isRunning"] = False
         self["destroyed"] = True
     def _updateDynamicSize(self, widget):
+        """
+        Private implementation of the 'updateDynamicWidgets'.
+        @param widget:
+        @return:
+        """
         if not widget["destroyed"] and "xOffset" in widget["placeRelData"]:# and widget["id"] in list(self["dynamicWidgets"].keys()):
             widget._get().place_forget()
             self._get().update_idletasks()
@@ -1149,15 +1638,22 @@ class Tk:
             widget._get().update_idletasks()
             widget["placed"] = True
     def updateDynamicWidgets(self):
+        """
+        Call this method to update all relative placed Widgets
+        wich are placed with 'placeRelative' manager.
+
+        @return:
+        """
+        # OLD implementation
         #for widget in list(self["dynamicWidgets"].values())[::-1]: # place frames first
         #    if not widget["destroyed"]: self._updateDynamicSize(widget)
 
         relevantIDs = list(self["dynamicWidgets"].keys())
         for widget in self._getAllChildWidgets(self):
             if widget.getID() in relevantIDs:
-                if isinstance(widget, ToolTip): continue
+                if isinstance(widget, _ToolTip): continue
                 if not widget["destroyed"]: self._updateDynamicSize(widget)
-
+        return self
 
     def _internalOnClose(self):
         """
@@ -1172,7 +1668,6 @@ class Tk:
             runnable()
             if not runnable.event["setCanceled"]:
                 self.destroy()
-
     def _registerOnResize(self, widget):
         self["dynamicWidgets"][widget["id"]] = widget
     def _unregisterOnResize(self, widget):
@@ -1195,7 +1690,7 @@ class Tk:
             self["privateOldWinSize"] = _size
             return _size
     def _finishLastTasks(self):
-        EventHandler._registerNewEvent(self, self.updateDynamicWidgets, EventType.key("<Configure>"), args=[], priority=1, decryptValueFunc=self._privateDecryptWindowResize)
+        _EventHandler._registerNewEvent(self, self.updateDynamicWidgets, EventType.key("<Configure>"), args=[], priority=1, decryptValueFunc=self._privateDecryptWindowResize)
         self.updateDynamicWidgets()
     def clearChildWidgets(self):
         """
@@ -1251,7 +1746,7 @@ class Tk:
             ch.append(widget)
 
         return ch
-    @staticmethod #TODO FINISH UFF
+    @staticmethod #TODO FINISH
     def _showParentChildTree(widget):
         print("==Hierarchy==")
         def point(_widget):
@@ -1272,12 +1767,12 @@ class Toplevel(Tk):
     def __init__(self, _master, group=None, topMost=True):
         if isinstance(_master, Tk):
             self._data = {"master": _tk_.Toplevel(), "tkMaster":_master, "registry":_EventRegistry(self), "setSize":(), "isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1), "id":"".join([str(r.randint(0,9)) for _ in range(15)]), "dynamicWidgets":{}, "title":"", "closeRunnable":None}
-            EventHandler._registerNewEvent(self, self.updateDynamicWidgets, EventType.key("<Configure>"), args=[], priority=1, decryptValueFunc=self._privateDecryptWindowResize)
+            _EventHandler._registerNewEvent(self, self.updateDynamicWidgets, EventType.key("<Configure>"), args=[], priority=1, decryptValueFunc=self._privateDecryptWindowResize)
             # configure internal onCloseEvent
             self["master"].protocol("WM_DELETE_WINDOW", self._internalOnClose)
         elif isinstance(_master, str) and _master == "Tk":
             self._data = {"master":_tk_.Tk(), "tkMaster":_master, "placeRelData":{"handler":None}, "registry":_EventRegistry(self), "setSize":(),"isRunning":False, "destroyed":False, "hasMenu":False, "childWidgets":{},"oldWinSize":(-1, -1), "privateOldWinSize":(-1, -1),"id":"".join([str(r.randint(0, 9)) for _ in range(15)]), "dynamicWidgets":{}, "title":"", "closeRunnable":None}
-            EventHandler._registerNewEvent(self, self.updateDynamicWidgets, EventType.key("<Configure>"), args=[],priority=1, decryptValueFunc=self._privateDecryptWindowResize)
+            _EventHandler._registerNewEvent(self, self.updateDynamicWidgets, EventType.key("<Configure>"), args=[], priority=1, decryptValueFunc=self._privateDecryptWindowResize)
             # configure internal onCloseEvent
             self["master"].protocol("WM_DELETE_WINDOW", self._internalOnClose)
         elif isinstance(_master, Toplevel):
@@ -1286,31 +1781,52 @@ class Toplevel(Tk):
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " or Tk instance not: " + str(_master.__class__.__name__))
         super().__init__(self._data, group)
         if topMost: self.setAllwaysOnTop()
-    def setTitle(self, title):
-        self["title"] = title
-        self["master"].title(title)
-        return self
     def mainloop(self):
+        """
+        Mainloop in Toplevel is only used when Toplevel is configured as Tk.
+
+        @return:
+        """
         if isinstance(self["master"], _tk_.Tk):
             self["master"].mainloop()
 class Dialog(Toplevel):
+    """
+    Similar to Toplevel.
+    Master of this dialog is complete disabled until dialog is closed.
+    Dialog is topmost on default.
+    """
     def __init__(self, _master, group=None, topMost=True):
         super().__init__(_master, group, topMost)
         self.hide()
         self._get().transient()
         self._get().grab_set()
     def show(self):
+        """
+        Shows the dialog.
+
+        @return:
+        """
         self._get().grab_set()
         self["master"].deiconify()
     def hide(self):
+        """
+        Hides the dialog.
+
+        @return:
+        """
         self._get().grab_release()
         self["master"].withdraw()
 
 class Widget:
+    """
+    Baseclass for all Widgets.
+    """
     def __init__(self, ins, _data, group):
         self._ins = self if ins is None else ins
         self.disable = self.setDisabled
         self.enable = self.setEnabled
+        self.setBackgroundColor = self.setBg
+        self.setForegroundColor = self.setFg
         if list(_data.keys()).__contains__("id"): self._data = _data
         else:
             _data["tkMaster"] = _data["master"] if isinstance(_data["master"], Tk) else _data["master"]["tkMaster"]
@@ -1341,13 +1857,49 @@ class Widget:
         if self["group"] is not None:
             self["group"].remove(self._ins)
         self._data.clear()
-
+    def getRelScreenPos(self)->Location2D:
+        """
+        Returns the location of this widget relative to the screen.
+        """
+        return Location2D(
+            self["widget"].winfo_rootx(),
+            self["widget"].winfo_rooty()
+        )
     def setTextOrientation(self, ori:Anchor=Anchor.LEFT):
+        """
+        Set the Text align.
+        Default is Anchor.CENTER
+
+
+
+        @param ori:
+        @return:
+        """
         self._setAttribute("anchor", ori.value if hasattr(ori, "value") else ori)
         return self
     def attachToolTip(self, text:str, atext:str="", group=None, waitBeforeShow=.5):
-        return ToolTip(self, atext != "", waitBeforeShow=waitBeforeShow, group=group).setText(text).setAdditionalText(atext)
+        """
+        Attaches a tooltip that opens on hover over this Widget longer than 'waitBeforeShow' seconds.
+
+
+        @param text: Text that will be shown in ToolTip
+        @param atext: AdditionalText will be shown when shift key is pressed.
+        @param group: Optional WidgetGroup instance for preset font, color etc
+        @param waitBeforeShow: Time the user have to hover over this widget to show the TooTip
+        @return: ToolTip instance for further configuration
+        """
+        return _ToolTip(self, atext != "", waitBeforeShow=waitBeforeShow, group=group).setText(text).setAdditionalText(atext)
     def setOrientation(self, ori:Orient):
+        """
+        Set the Orientation via Orient enum.
+        Used for Processbars, Scales etc.
+        Posible orientations:
+            Orient.HORIZONTAL
+            Orient.VERTICAL
+
+        @param ori:
+        @return:
+        """
         self._setAttribute("orient", ori.value if hasattr(ori, "value") else ori)
         return self
     def _setId(self, id_:str): #@TODO: why? maby error with event??
@@ -1355,73 +1907,217 @@ class Widget:
     def _addData(self, _data:dict):
         self._data = {**self._data, **_data}
     def unbind(self, event:Union[EventType, Key, Mouse]):
-        self["registry"].unregisterType(event)
+        """
+        Unbinds all Events from given EventType.
+
+        @param event:
+        @return:
+        """
+        #self["registry"].unregisterType(event)
+        raise NotImplemented()
     def setStyle(self, style:Style):
+        """
+        Set widget style.
+        Use Style enum to choose between styles.
+
+        @param style:
+        @return:
+        """
         self._setAttribute("relief", style.value if hasattr(style, "value") else style)
         return self
     def setBorderWidth(self, bd:int):
+        """
+        Some Widgets can change their border size.
+
+        @param bd:
+        @return:
+        """
         self._setAttribute("bd", bd)
         return self
     def getHeight(self):
+        """
+        Returns the Widget Height.
+        May be only possible after using any place manager.
+
+        @return:
+        """
         self.updateIdleTasks()
         return self["widget"].winfo_height()
     def getWidth(self):
+        """
+        Returns the Widget Width.
+        May be only possible after using any place manager.
+
+        @return:
+        """
         self.updateIdleTasks()
         return self["widget"].winfo_width()
     def generateEvent(self, event:Union[EventType, Key, Mouse, str]):
+        """
+        Triggers given event on this widget.
+
+        @note Custom Events are not implemented yet!
+
+        @param event:
+        @return:
+        """
         event = event.value if hasattr(event, "value") else event
         if event.startswith("["):
             raise NotImplemented("Trigger custom Events is not implemented yet!")
         self["widget"].event_generate(event)
     def setCompound(self, dir_:Direction):
+        """
+        Select the Compound of an image behind a text.
+
+        example:
+            Center -> centers a image behind an text.
+
+        @param dir_:
+        @return:
+        """
         dir_ = dir_.value if hasattr(dir_, "value") else dir_
         self._setAttribute("compound", dir_)
         return self
     def lift(self, widg=None):
+        """
+        Lifts this widget in front of all other or in front of given Widget.
+
+        @param widg:
+        @return:
+        """
         if widg is not None:
             self["widget"].lift(widg._get())
         else:
             self["widget"].lift()
     def bind(self, func:Callable, event:Union[EventType, Key, Mouse, str], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        """
+        Binds a specific event to the Widget. Runs given function on trigger.
+
+        @param func: function get called on trigger
+        @param event: Event type: EventType enum or default tkinter event as string.
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
         if event == "CANCEL": return
         if hasattr(event, "value"):
             event = event.value
         if event.startswith("["):
-            EventHandler._registerNewCustomEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+            _EventHandler._registerNewCustomEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
         else:
-            EventHandler._registerNewEvent(self._ins, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+            _EventHandler._registerNewEvent(self._ins, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
     def canTakeFocusByTab(self, b:bool=False):
+        """
+        Set if this widget can take focus by pressing tab.
+        Default: True
+
+        @param b:
+        @return:
+        """
         self._setAttribute("takefocus", int(b))
         return self
     def setCursor(self, c:Cursor):
+        """
+        Set cursor image from Cursor enum or default tkinter string.
+        This only applies while hovering over this widget.
+
+        @note only predefined cursors are implented yet
+        @param c:
+        @return:
+        """
         self["widget"]["cursor"] = c.value if hasattr(c, "value") else c
         return self
     def isFocus(self):
+        """
+        Returns a boolean if this widget is currently no focus.
+
+        @return:
+        """
         return self["widget"].focus_get() == self._get()
     def setFocus(self):
+        """
+        Sets the focus to this Window.
+
+        @return:
+        """
         self["widget"].focus_set()
         return self
-    def getPosition(self)->Location2D:#?
+    def getPosition(self)->Location2D:
+        """
+        Returns the widget position.
+        May be only possible after using any place manager.
+
+        @return:
+        """
         return Location2D(self["widget"].winfo_x(), self["widget"].winfo_y())
     def getPositionToMaster(self)->Location2D:
+        """
+        Returns the widget position relative to master window.
+        May be only possible after using any place manager.
+
+        @return:
+        """
         return Location2D(self["widget"].winfo_vrootx(), self["widget"].winfo_vrooty())
     def setDisabled(self):
+        """
+        Disables this widget.
+
+        @return:
+        """
         self._setAttribute("state", _tk_.DISABLED)
         return self
     def setEnabled(self):
+        """
+        Enables this widget.
+
+        @return:
+        """
         self._setAttribute("state", _tk_.NORMAL)
         return self
     def update(self):
+        """
+        Calls the tkinter update of this widget.
+
+        Processes all pending Events.
+        Redaws this widget.
+        ...
+
+        @return:
+        """
         self["widget"].update()
         return self
     def updateIdleTasks(self):
+        """
+        Updates only the tkinter idle tasks.
+
+        @return:
+        """
         self["widget"].update_idletasks()
         return self
     def updateRelativePlace(self):
+        """
+        Updates the relative place of this widget.
+        Only updates if the widget ist placed relative.
+
+        @return:
+        """
         self["tkMaster"]._updateDynamicSize(self)
         return self
     def setFont(self, size:int=10, art=FontType.ARIAL, underline=False, bold=False, slant=False, overstrike=False):
+        """
+        Use this method to configure the Font.
+
+        @param size: text size
+        @param art: font type
+        @param underline: text is underlined
+        @param bold: text is bold
+        @param slant: text is slant
+        @param overstrike: text is overstrike
+        @return:
+        """
         _data = {'family': art.value if hasattr(art, "value") else art,
                 'size': size,                            # size
                 'weight': 'bold' if slant else 'normal', # fett
@@ -1432,33 +2128,88 @@ class Widget:
         self._setAttribute("font", _font.Font(**_data))
         return self
     def setText(self, text):
+        """
+        Set the text of this widget.
+
+        @param text:
+        @return:
+        """
         self._setAttribute("text", str(text))
         return self
     def getText(self):
+        """
+        Returns the set text.
+
+        @return:
+        """
         return self["widget"]["text"]
     def setBg(self, col:Union[Color, str]):
+        """
+        Set the background color of this widget.
+
+        @param col: Use Color enum, tkinter string or hex-code.
+        @return:
+        """
         self._setAttribute("bg", col.value if hasattr(col, "value") else col)
         return self
     def setFg(self, col:Union[Color, str]):
+        """
+         Set the text color of this widget.
+
+        @param col: Use Color enum, tkinter string or hex-code.
+        @return:
+        """
         self._setAttribute("fg", col.value if hasattr(col, "value") else col)
         return self
-    def setActiveBg(self, col:Color):
-        self._setAttribute("activebackground", col.value if hasattr(col, "value") else col)
-        return self
-    def setActiveFg(self, col:Color):
-        self._setAttribute("activeforeground", col.value if hasattr(col, "value") else col)
-        return self
     def placeForget(self):
+        """
+        Removes the this widget from its master.
+        Can be placed again after.
+
+        @return:
+        """
         try:
             self["widget"].place_forget()
             self["placed"] = False
         except: pass
         self["tkMaster"]._unregisterOnResize(self)
     def grid(self, row=0, column=0):
+        """
+        Default tkinter grid-manager.
+
+        @param row:
+        @param column:
+        @return:
+        """
         assert not self["destroyed"], "The widget has been destroyed and can no longer be placed."
         self["widget"].grid(row=row, column=column)
         return self
     def _placeRelative(self, fixX, fixY, fixWidth, fixHeight, xOffset, yOffset, xOffsetLeft, xOffsetRight, yOffsetUp, yOffsetDown, stickRight, stickDown, centerY, centerX, changeX, changeY, changeWidth, changeHeight, nextTo, updateOnResize):
+        """
+        Private implementation of relative place.
+
+        @param fixX:
+        @param fixY:
+        @param fixWidth:
+        @param fixHeight:
+        @param xOffset:
+        @param yOffset:
+        @param xOffsetLeft:
+        @param xOffsetRight:
+        @param yOffsetUp:
+        @param yOffsetDown:
+        @param stickRight:
+        @param stickDown:
+        @param centerY:
+        @param centerX:
+        @param changeX:
+        @param changeY:
+        @param changeWidth:
+        @param changeHeight:
+        @param nextTo:
+        @param updateOnResize:
+        @return:
+        """
         assert 100 >= xOffset + xOffsetLeft >= 0 and 100 >= xOffset + xOffsetRight >= 0, "xOffset must be a int Value between 0 and 100!"
         assert 100 >= yOffset + yOffsetUp >= 0 and 100 >= yOffset + yOffsetDown >= 0, "yOffset must be a int Value between 0 and 100!"
         self._data["placeRelData"] = {"handler":self["placeRelData"]["handler"],
@@ -1486,9 +2237,51 @@ class Widget:
             self["tkMaster"]._registerOnResize(self)
         return self
     def placeRelative(self, fixX:int=None, fixY:int=None, fixWidth:int=None, fixHeight:int=None, xOffset=0, yOffset=0, xOffsetLeft=0, xOffsetRight=0, yOffsetUp=0, yOffsetDown=0, stickRight=False, stickDown=False, centerY=False, centerX=False, changeX=0, changeY=0, changeWidth=0, changeHeight=0, nextTo=None, updateOnResize=True):
+        """
+        Scales this widgetsize relative to the Window-Size.
+        This scaling happens on resize of the window.
+
+        Can be overwritten!
+
+        Offset:
+            Offset means to configure the size of the widget percentage to the master size.
+            xOffsetLeft=50 means that the widget has 50% of the witdh of the master and is right oriented.
+
+        @param fixX: Defines x coordinate as fixed. This is no longer auto-configured.
+        @param fixY: Defines y coordinate as fixed. This is no longer auto-configured.
+        @param fixWidth: Defines width coordinate as fixed. This is no longer auto-configured.
+        @param fixHeight: Defines height coordinate as fixed. This is no longer auto-configured.
+        @param xOffset: offset x both sides
+        @param yOffset: offset y both sides
+        @param xOffsetLeft: offset x left
+        @param xOffsetRight: offset x right
+        @param yOffsetUp: offset y up
+        @param yOffsetDown: offset y down
+        @param stickRight: Sets the fixpoint to the right side.
+        @param stickDown: Sets the bottom to the right side.
+        @param centerY: Centers the widget on Y-Axis.
+        @param centerX: Centers the widget on X-Axis.
+        @param changeX: Changes x coodinate after all calculations are done.
+        @param changeY: Changes y coodinate after all calculations are done.
+        @param changeWidth: Changes width coodinate after all calculations are done.
+        @param changeHeight: Changes height coodinate after all calculations are done.
+        @param nextTo: NOT IMPLEMENTED YET
+        @param updateOnResize: True -> registers to update on resize (Default) | False -> update once
+        @return:
+        """
         self._placeRelative(fixX, fixY, fixWidth, fixHeight, xOffset, yOffset, xOffsetLeft, xOffsetRight, yOffsetUp, yOffsetDown, stickRight, stickDown, centerY, centerX, changeX, changeY, changeWidth, changeHeight, nextTo, updateOnResize)
         return self
-    def _place(self, x, y, width, height, anchor):
+    def _place(self, x:int, y:int, width:int, height:int, anchor:Anchor):
+        """
+        Private implementation of place.
+
+        @param x:
+        @param y:
+        @param width:
+        @param height:
+        @param anchor:
+        @return:
+        """
         assert not self["destroyed"], "The widget has been destroyed and can no longer be placed."
         if x is None: x = 0
         if y is None: y = 0
@@ -1497,9 +2290,9 @@ class Widget:
         if isinstance(x, Location2D):
             x, y = x.get()
         if isinstance(x, Rect):
-            width = x.getWidth()
             height = x.getHeight()
-            x, y, = x.getLoc1().get()
+            width = x.getWidth()
+            x, y = x.getLoc1().get()
         x = int(round(x, 0))
         y = int(round(y, 0))
         self._get().place_forget()
@@ -1508,25 +2301,29 @@ class Widget:
         return self
     def place(self, x=None, y=None, width=None, height=None, anchor:Anchor=Anchor.UP_LEFT):
         """
-        To override!
-        @param x:
-        @param y:
-        @param width:
-        @param height:
-        @param anchor:
+        Place the widget with fix coords and width and height.
+        width and height can be left out and be handled by tkinter to set is automatically.
+
+        Can be overwritten!
+
+        @param x: X-Coordinate relative to the anchor.
+        @param y: Y-Coordinate relative to the anchor.
+        @param width: width of the widget.
+        @param height: height of the widget.
+        @param anchor: Set the fixpoint. Default: Upper left corner.
         @return:
         """
         self._place(x, y, width, height, anchor)
         return self
     def _destroy(self):
-        assert not self["destroyed"], f"Widget {self.getType()} {self.getID()} is already destroyed!"
+        assert not self["destroyed"], f"Widget {type(self)} {self.getID()} is already destroyed!"
         self["registry"].unregisterAll()
         self["tkMaster"]._unregisterOnResize(self)
         if WIDGET_DELETE_DEBUG: print(type(self["master"]), "->", type(self))
         del self["master"]["childWidgets"][self["id"]] # unregister as child widget from master
 
         WidgetGroup.removeFromAll(self)
-        if not isinstance(self, ToolTip): # -> Ignore Widget is None
+        if not isinstance(self, _ToolTip): # -> Ignore Widget is None
             if not self["destroyed"]: self["widget"].destroy()
         self["destroyed"] = True
         self["placed"] = False
@@ -1536,15 +2333,36 @@ class Widget:
         self._data.clear()
 
     def destroy(self):
+        """
+        Destroys this widget.
+        The Widget instance cannot be used after destroying it!
+
+        Can be overwritten!
+        @return:
+        """
         self._destroy()
         return self
-    def getType(self):
-        return type(self._ins)
     def applyTkOption(self, **kwargs):
+        """
+        Apply one or more tkinter attribues to this widget.
+
+        Instead of:
+            widget["text"] = "This is a text!"
+        Use:
+            widget.applyTkOption(text="This is a text!", ...)
+
+        @param kwargs:
+        @return:
+        """
         for k, v in zip(kwargs.keys(), kwargs.values()):
             self._setAttribute(k, v)
         return self
     def getTkMaster(self)->Tk | Toplevel:
+        """
+        Returns the highest master (Tk/Toplevel) of this widget.
+
+        @return:
+        """
         return self["tkMaster"]
     def clearChildWidgets(self):
         """
@@ -1574,6 +2392,11 @@ class Widget:
         del self["childWidgets"][w["id"]]
 
     def getID(self)->str:
+        """
+        Returns this widget id.
+
+        @return:
+        """
         return self["id"]
     def _decryptEvent(self, args):
         pass
@@ -1587,6 +2410,7 @@ class Widget:
         try:
             self["widget"][name] = value
         except Exception as e:
+            value = repr(value)
             valType = type(value)
             value = value[0:50]+"..." if len(str(value)) > 50 else value
             raise AttributeError("Could not set Attribute of Widget "+str(type(self._ins))+"!\n\tKEY: '"+str(name)+"'\n\tVALUE["+str(valType)+"]: '"+str(value)+"'\n"+str(self._ins)+" \n\tTKError: "+str(e))
@@ -1616,48 +2440,74 @@ class _WidgetGroupMethod:
                 if _data["ignoreErrors"]: continue
                 raise Exception(f"Error while execute '{self._name}' command on [{len(self._ins._widgets)}].\nType: {type(w)}, Error: {e}")
 class WidgetGroup:
+    """
+    Use the WidgetGroup to group widget.
+
+    Methods can than be called on the group to configure all members in the group.
+    """
     _GROUPS = []
-    def __init__(self, type_=None, instantiate=None):
+    def __init__(self, instantiate=None):
+        """
+        @param type_: If
+        @param instantiate: creates a copy of given group.
+        """
         self._widgets = []
         self._commandsOnRegister = [*instantiate._commandsOnRegister] if instantiate is not None else []
         self._data = {
             "ignoreErrors":False,
             "changeOnlyForType":None,
         }
-        self._priorityData = None
-        for method in dir(type_ if isinstance(type_, Widget) else Widget):
+        self._priorityData = None # data for settings with execute once
+        for method in dir(Widget):
             if method.startswith("__"): continue
             setattr(self, method, _WidgetGroupMethod(self, method))
         WidgetGroup._GROUPS.append(self)
     def add(self, w):
+        """
+        Adds widget w to this group.
+
+        @param w:
+        @return:
+        """
         for method in dir(type(w)):
             if method.startswith("__"): continue
             if hasattr(self, method): continue
             setattr(self, method, _WidgetGroupMethod(self, method))
         self._widgets.append(w)
-        self.reRunRegisteredCommands(w)
-        if WIDGET_DELETE_DEBUG: TextColor.print(f"+{len(self._widgets)} {type(w)}", "green")
+        self.executeCommands(w)
+        if WIDGET_DELETE_DEBUG: print(f"+{len(self._widgets)} {type(w)}")
+    def remove(self, w):
+        """
+        Removes widget from this group.
 
-    def remove(self, widg):
-        if widg in self._widgets:
-            self._widgets.remove(widg)
-            if WIDGET_DELETE_DEBUG: TextColor.print(f"-{len(self._widgets)} {type(widg)}", "red")
+        @param w:
+        @return:
+        """
+        if w in self._widgets:
+            self._widgets.remove(w)
+            if WIDGET_DELETE_DEBUG: print(f"-{len(self._widgets)} {type(w)}")
     def addCommand(self, function_name:str, *args, ignoreErrors=False, onlyFor=None):
         """
-        args -> any Function of any Widget to run on this Widget.
-        Gets executed on if Widget is created with this Group.
+        Given function is executed on if Widget is created with this Group.
 
         set Function_name '@custom' for Custom change.
         Pass function with one Argument (for widget) to args!
 
-        @param function_name:
-        @param args:
-        @param ignoreErrors:
-        @param onlyFor:
+        @param function_name: name of the function to call on intantiate.
+        @param args: arguments for this function
+        @param ignoreErrors: if the errors should be ignored
+        @param onlyFor: the function is only executed for widget type
         @return:
         """
         self._commandsOnRegister.append([function_name, args, ignoreErrors, onlyFor])
-    def reRunRegisteredCommands(self, _w=None, ignoreAll=False):
+    def executeCommands(self, w=None, ignoreAll=False):
+        """
+        This method runs all the registered Commands.
+
+        @param w: widget to execute commands on | None -> all widgets
+        @param ignoreAll: if errors should be ignored
+        @return:
+        """
         def _run(w):
             for cmd, args, igErr, olyF in self._commandsOnRegister:
                 if cmd is None and igErr: continue
@@ -1671,16 +2521,35 @@ class WidgetGroup:
                 except Exception as e:
                     if igErr: continue
                     raise Exception(f"Error while execute '{cmd}' command on [{len(self._widgets)}].\nType: {type(w)}, Error: {e}")
-        if _w is None:
+        if w is None:
             for w in self._widgets: _run(w)
         else:
-            _run(_w)
+            _run(w)
     def clearCommands(self):
+        """
+        Clears all registered Commands/Functions.
+
+        @return:
+        """
         self._commandsOnRegister.clear()
     def setIgnoreErrors(self, b:bool):
+        """
+        Errors in methods that are executed from this group are ingnored.
+
+        @param b: is error ignored.
+        @return:
+        """
         self._data["ignoreErrors"] = bool(b)
         return self
     def runWithSettings(self, ignoreErrors=False, changeOnlyForType=None):
+        """
+        Run only the following Command with this settings.
+
+
+        @param ignoreErrors: is error ignored.
+        @param changeOnlyForType: command is only executed on that widget.
+        @return:
+        """
         self._priorityData = {
             "ignoreErrors":ignoreErrors,
             "changeOnlyForType":changeOnlyForType,
@@ -1689,12 +2558,28 @@ class WidgetGroup:
 
     @staticmethod
     def removeFromAll(widg):
+        """
+        This widget get removed from all groups.
+
+        @param widg:
+        @return:
+        """
         for group in WidgetGroup._GROUPS:
             group.remove(widg)
 
-class ToolTip(Widget):
+class Placer:
+    def __init__(self, ySpace, yStart=0):
+        self._ySpace = ySpace
+        self._yStart = yStart
+    def get(self):
+        x = self._yStart
+        self._yStart += self._ySpace
+        return x
+
+class _ToolTip(Widget):
     """
-    create a tooltip for a given widget
+    Create a tooltip for a given widget.
+    It shows up on hover over widget.
     """
     def __init__(self, _master, pressShiftForMoreInfo=False, waitBeforeShow=.5, group=None):
         if isinstance(_master, dict):
@@ -1746,7 +2631,7 @@ class ToolTip(Widget):
         self._hidetip()
     def _schedule(self):
         self._unschedule()
-        self["task"] = TaskScheduler(self["master"], self["wait"], self._show).start()
+        self["task"] = _TaskScheduler(self["master"], self["wait"], self._show).start()
     def _unschedule(self):
         task = self["task"]
         self["task"] = None
@@ -1783,6 +2668,12 @@ class PDFViewer(Widget):
         super().__init__(self, self._data, group)
 
 class MatPlotLibFigure(Widget):
+    """
+    Widget:
+    Use this widget to display plots from matplotlib library.
+
+    Pass the Figure instance from matplotlib.
+    """
     def __init__(self, _master, fig, group=None, toolBar=False):
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
         from matplotlib.backend_bases import key_press_handler
@@ -1821,20 +2712,25 @@ class MatPlotLibFigure(Widget):
                 "_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(
                     _master.__class__.__name__))
         super().__init__(self, self._data, group)
-
     def _updatePlace(self, e):
         self.wwidget_plot.updateRelativePlace()
         self.wwidget_settings.updateRelativePlace()
-
     def _bind(self):
         self.bind(self._updatePlace, EventType.CUSTOM_RELATIVE_UPDATE)
-
-
-
     def draw(self):
+        """
+        Draws the figure.
+        @return:
+        """
         self["figureWidget"].draw()
         return self
 class Calendar(Widget):
+    """
+    Widget:
+    This widget displays a calendar to select day and year.
+
+    To use this widget the 'tkcalencar' library have to be installed.
+    """
     def __init__(self, _master, group=None):
         import tkcalendar as cal
         if isinstance(_master, dict):
@@ -1846,30 +2742,74 @@ class Calendar(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
+    def _decryptEvent(self, args):
+        return self["widget"].get_date()
     def setDate(self, d, m, y):
+        """
+        Sets the date.
+        @param d: day
+        @param m: month
+        @param y: year
+        @return:
+        """
         self._setAttribute("day", d)
         self._setAttribute("month", m)
         self._setAttribute("year", y)
         return self
-    def _decryptEvent(self, args):
-        return self["widget"].get_date()
     def setMaxDate(self, d, m, y):
+        """
+        Set the maxdate.
+        Used to specify a range to select the date from.
+        @param d: day
+        @param m: month
+        @param y: year
+        @return:
+        """
         d = int(d)
         m = int(m)
         y = int(y)
         self._setAttribute("maxdate", date(y, m, d))
         return self
     def setMinDate(self, d, m, y):
+        """
+        Set the mindate.
+        Used to specify a range to select the date from.
+        @param d: day
+        @param m: month
+        @param y: year
+        @return:
+        """
         d = int(d)
         m = int(m)
         y = int(y)
         self._setAttribute("mindate", date(y, m, d))
         return self
     def getValue(self):
+        """
+        returns the Date in string format.
+        Example: '1/1/20'
+        @return:
+        """
         return self["widget"].get_date()
     def onCalendarSelectEvent(self, func, args:list = None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewEvent(self, func, EventType.customEvent("<<CalendarSelected>>"), args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        """
+        Bind on date select event to this widget. Runs given function on trigger.
+
+        @param func: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
+        _EventHandler._registerNewEvent(self, func, EventType.customEvent("<<CalendarSelected>>"), args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
 class DropdownCalendar(Widget):
+    """
+    Widget:
+    This widget displays a Entry like folds out calendar to select day and year.
+
+    To use this widget the 'tkcalencar' library have to be installed.
+    """
     def __init__(self, _master, group=None):
         import tkcalendar as cal
         if isinstance(_master, dict):
@@ -1881,24 +2821,73 @@ class DropdownCalendar(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
+    def _decryptEvent(self, args):
+        return self["widget"].get_date()
     def setDate(self, d, m, y):
+        """
+        Sets the date.
+        @param d: day
+        @param m: month
+        @param y: year
+        @return:
+        """
         self._setAttribute("day", d)
         self._setAttribute("month", m)
         self._setAttribute("year", y)
         return self
-    def _decryptEvent(self, args):
-        return self["widget"].get_date()
     def setMaxDate(self, d, m, y):
+        """
+        Set the maxdate.
+        Used to specify a range to select the date from.
+        @param d: day
+        @param m: month
+        @param y: year
+        @return:
+        """
+        d = int(d)
+        m = int(m)
+        y = int(y)
         self._setAttribute("maxdate", date(y, m, d))
         return self
     def setMinDate(self, d, m, y):
+        """
+        Set the mindate.
+        Used to specify a range to select the date from.
+        @param d: day
+        @param m: month
+        @param y: year
+        @return:
+        """
+        d = int(d)
+        m = int(m)
+        y = int(y)
         self._setAttribute("mindate", date(y, m, d))
         return self
     def getValue(self):
+        """
+        returns the Date in string format.
+        Example: '1/1/20'
+        @return:
+        """
         return self["widget"].get_date()
-    def onCalendarSelectEvent(self, func, args:list = None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewEvent(self, func, EventType.customEvent("<<DateEntrySelected>>"), args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+    def onCalendarSelectEvent(self, func, args: list = None, priority: int = 0, defaultArgs=False, disableArgs=False):
+        """
+        Bind on date select event to this widget. Runs given function on trigger.
+
+        @param func: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
+        _EventHandler._registerNewEvent(self, func, EventType.customEvent("<<CalendarSelected>>"), args, priority,
+                                        decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs,
+                                        disableArgs=disableArgs)
 class ScrollBar(Widget):
+    """
+    Scrollbar Widget can be attached to some Widget using their 'attachScrollbar' method.
+    """
     def __init__(self, _master, autoPlace=True, group=None):
         if isinstance(_master, dict):
             self._data = _master
@@ -1910,19 +2899,44 @@ class ScrollBar(Widget):
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
     def callEventOnScrollbarRelease(self):
+        """
+        Configures Scrollbar to call the 'onScollEvent' on scrollbar release.
+        @return:
+        """
         self._setAttribute("jump", 1)
     def callEventOnScroll(self):
+        """
+        Configures Scrollbar to call the 'onScollEvent' on scroll.
+        This is the DEFAULT setting.
+        @return:
+        """
         self._setAttribute("jump", 0)
     def onScrollEvent(self, func, args:list = None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewCommand(self, func, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
-    def _decryptEvent(self, args):
-        return None
+        """
+        Bind on scroll event. Runs given function on trigger
+
+        @param func: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
+        _EventHandler._registerNewCommand(self, func, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
     def setWidth(self, w:int):
         raise NotImplemented()
         self["widget"]["width"] = w
         self["thickness"] = w-10
         return self
+    def _decryptEvent(self, args):
+        return None
 class Frame(Widget):
+    """
+    Widget:
+    The Frame is used to group or organize widgets.
+    Frames can be places and configured as usualy.
+    Once the frame is places it can be used as Master to place other widgets on and relative to the frame.
+    """
     def __init__(self, _master, group=None):
         if isinstance(_master, dict):
             self._data = _master
@@ -1946,6 +2960,12 @@ class Frame(Widget):
         for w in self["childWidgets"].copy().values():
             w.destroy()
 class LabelFrame(Widget):
+    """
+    Widget:
+    Similar the Frame widget.
+    The LabelFrame has an outline.
+    A name can be set using the 'setText' methods.
+    """
     def __init__(self, _master, group=None):
         if isinstance(_master, dict):
             self._data = _master
@@ -1955,7 +2975,6 @@ class LabelFrame(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
-
     def __destroy(self):
         print("test2<-----")
         assert self["placed"], f"Widget is already destroyed! (LabelFrame)"
@@ -1973,6 +2992,10 @@ class LabelFrame(Widget):
         for w in self["childWidgets"].copy().values():
             w.destroy()
 class Label(Widget):
+    """
+    Widget:
+    The Label widget is used to display one line text or images.
+    """
     def __init__(self, _master, group=None, **kwargs):
         if isinstance(_master, dict):
             self._data = _master
@@ -1984,19 +3007,35 @@ class Label(Widget):
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+" or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
     def clear(self):
+        """
+        Clears the displayed Text on the Label.
+        @return:
+        """
         self.setText("")
         return self
     def setImage(self, img:Union[TkImage, PILImage]):
+        """
+        Set the image displayed on the Label.
+        Use either an 'TkImage' or an 'PILImage' instance.
+        @param img:
+        @return:
+        """
         self["widget"]._image = img._get()
         self["widget"]["image"] = self["widget"]._image
         return self
     def clearImage(self):
+        """
+        Clears the displayed image.
+        @return:
+        """
         self["widget"]["image"] = ''
         return self
 class Checkbutton(Widget):
-    CHECKED = True
-    UNCHECKED = False
-    def __init__(self, _master, group=None, defaultState:bool=UNCHECKED, text:str=""):
+    """
+    Widget:
+    The Checkbutton is basicly a Label with a checkbox on the left.
+    """
+    def __init__(self, _master, group=None):
         self.getValue = self.getState
         self.setValue = self.setState
         if isinstance(_master, dict):
@@ -2008,33 +3047,74 @@ class Checkbutton(Widget):
             _master._widgets.append(["checkbutton", self])
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
             intVar = _tk_.IntVar(_master._get())
-            intVar.set(defaultState)
-            self._data = {"master":_master, "text":text, "widget":_tk_.Checkbutton(_master._get()), "intVar":intVar, "init":{"text":text, "variable":intVar}}
+            self._data = {"master":_master, "text":"", "widget":_tk_.Checkbutton(_master._get()), "intVar":intVar, "init":{"variable":intVar}}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
     def __bool__(self):
         return bool(self.getState())
-    def onSelectEvent(self, func, args:list = None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewCommand(self, func, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
-        return self
     def _decryptEvent(self, e):
         return self.getState()
+    def onSelectEvent(self, func, args:list = None, priority:int=0, defaultArgs=False, disableArgs=False):
+        """
+        Bind on checkbox select event to this widget. Runs given function on trigger.
+
+        @param func: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
+        _EventHandler._registerNewCommand(self, func, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        return self
     def toggle(self):
+        """
+        Toggles the checkbox.
+
+        Selected -> Unselected
+        Unselected -> Selected
+        @return:
+        """
         self.setState(not self.getState())
         return self
     def setSelected(self):
+        """
+        Set the checkbox selected.
+        @return:
+        """
         self.setState(True)
         return self
     def setState(self, b:bool):
+        """
+        Set the checkbox selected or not using the given boolean.
+        @param b:
+        @return:
+        """
         self["intVar"].set(bool(b))
         return self
     def getState(self)->bool:
+        """
+        Returns the current selection state as boolean.
+        @return:
+        """
         return bool(self["intVar"].get())
-    def setSelectColor(self, c:Color):
+    def setSelectColor(self, c:Union[Color, str]):
+        """
+        Set the backgroundcolor of the checkbox.
+        @param c:
+        @return:
+        """
         self._setAttribute("selectcolor", c.value if hasattr(c, "value") else c)
         return self
 class Radiobutton:
+    """
+    Widget:
+    This is NOT the widget class.
+    This class is only used to bind events or get the current selected radiobutton.
+    Use the method 'createNewRadioButton' to create the radiobuttons.
+    These can be placed and used as normal widgets.
+    """
     def __init__(self, _master, group=None):
         self.getValue = self.getState
         if isinstance(_master, dict):
@@ -2042,52 +3122,101 @@ class Radiobutton:
         elif isinstance(_master, self.__class__):
             self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            intVar = IntVar(_master)
+            intVar = _IntVar(_master)
             self._data = {"master": _master,  "widgets":[], "intVar":intVar, "eventArgs":[], "group":group}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-
     def __getitem__(self, item):
         return self._data[item]
-
-
-    def getState(self):
+    def getState(self)->int:
+        """
+        Returns the index of selected radiobutton.
+        @return:
+        """
         return self._data["intVar"].get()
     def setState(self, i:int):
+        """
+        Set radiobutton on index i selected.
+        @param i:
+        @return:
+        """
         self._data["widgets"][i].setSelected()
         return self
-
-
     def createNewRadioButton(self, group=None):
+        """
+        This method creates a new Radiobutton and returns it.
+        The order that the Radiobuttons are added are the related indices wich are used for events.
+        The returned widget can be placed and used as normal widget.
+        The passed WidgetGroup is applied to this Radiobutton.
+        @param group:
+        @return:
+        """
         rb =_RadioButton(self._data["master"], self._data["intVar"], (group if group is not None else self["group"]))
         self._data["widgets"].append(rb)
         for i in self._data["eventArgs"]:
-            EventHandler._registerNewCommand(rb, i["func"], i["args"], i["priority"], decryptValueFunc=rb._decryptEvent, defaultArgs=i["defaultArgs"], disableArgs=i["disableArgs"])
+            _EventHandler._registerNewCommand(rb, i["func"], i["args"], i["priority"], decryptValueFunc=rb._decryptEvent, defaultArgs=i["defaultArgs"], disableArgs=i["disableArgs"])
         return rb
     def onSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        """
+        Bind on select event to this widget. Runs given function on trigger.
+
+        @param func: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
         self._data["eventArgs"].append({"func":func, "args":args , "priority":priority, "defaultArgs":defaultArgs, "disableArgs":disableArgs})
         for btn in self._data["widgets"]:
-            EventHandler._registerNewCommand(btn, func, args, priority, decryptValueFunc=btn._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+            _EventHandler._registerNewCommand(btn, func, args, priority, decryptValueFunc=btn._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
 class _RadioButton(Widget):
+    """
+    Subclass for Radiobuttons.
+    Represents a single Radiobutton widget.
+    """
     def __init__(self, _master, intVar, group):
         self._data = {"master": _master, "widget": _tk_.Radiobutton(_master._get()), "intvar": intVar, "init": {"variable": intVar._get(), "value": intVar._add()}}
         super().__init__(self, self._data, group)
     def setSelected(self):
+        """
+        Set the Radiobutton selected.
+        @return:
+        """
         self["intvar"].set(self["widget"]["value"])
         return self
-    def getValue(self):
+    def getValue(self)->int:
+        """
+        Returns the Selected Index.
+        @return:
+        """
         return self["intvar"].get()
-    def setSelectColor(self, c:Color):
+    def setSelectColor(self, c:Union[Color, str]):
+        """
+        Set the backgroundcolor of the radiobutton.
+        @param c:
+        @return:
+        """
         self._setAttribute("selectcolor", c.value if hasattr(c, "value") else c)
         return self
     def flash(self):
+        """
+        This method changes serveral times between selected color and background color.
+        This can be used to indicate that the user has to click on this widget.
+
+        @return:
+        """
         self["widget"].flash()
-        #changes serveral times between selected and bg color
         return self
     def _decryptEvent(self, args):
         return self.getText()
 class Button(Widget):
+    """
+    Widget:
+    The Button widget is clickable.
+    The onclick event can be bound via the 'setCommand' method.
+    """
     def __init__(self, _master, group=None, text="", canBePressedByReturn=True, fireOnlyOnce=True, fireInterval:float=0.1, firstDelay:float=0.5):
         if isinstance(_master, dict):
             self._data = _master
@@ -2107,31 +3236,89 @@ class Button(Widget):
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__))
         super().__init__(self, self._data, group)
     def triggerButtonPress(self, normalRelief=True):
+        """
+        This method can be used to trigger the Button and its command.
+        @param normalRelief: if True the pressanimation is shown otherwise only the bound function is triggered.
+        @return:
+        """
         if normalRelief: self.setStyle(Style.SUNKEN)
         self.update()
-        self["registry"].getHandler("cmd")()
+        trigger = self["registry"].getHandler("cmd")
+        if trigger is not None: trigger()
         if normalRelief: self.setStyle(Style.RAISED)
         self.update()
+    def setActiveBg(self, col:Color):
+        """
+        Set the active background color.
+        Visible if button is pressed.
+
+        @param col: Use Color enum, tkinter string or hex-code.
+        @return:
+        """
+        self._setAttribute("activebackground", col.value if hasattr(col, "value") else col)
+        return self
+    def setActiveFg(self, col:Color):
+        """
+        Set the active foreground color.
+        Visible if button is pressed.
+
+        @param col: Use Color enum, tkinter string or hex-code.
+        @return:
+        """
+        self._setAttribute("activeforeground", col.value if hasattr(col, "value") else col)
+        return self
     def setStyleOnHover(self, style:Style):
+        """
+        Changes the Style on hover.
+        Use the Style enum to change.
+        @param style:
+        @return:
+        """
         self._setAttribute("overrelief", style.value if hasattr(style, "value") else style)
         return self
     def flash(self):
+        """
+        This method changes serveral times between selected color and background color.
+        This can be used to indicate that the user has to click on this widget.
+
+        @return:
+        """
         self["widget"].flash()
-        #changes serveral times between selected and bg color
         return self
     def setCommand(self, cmd:Callable, args:list=None, priority:int=0, disableArgs=False, defaultArgs=False):
+        """
+        Bind on click event to this widget. Runs given function on trigger.
+
+        @param cmd: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
         if cmd is None: return self
-        runnable = EventHandler._registerNewCommand(self, cmd, args, priority, disableArgs=disableArgs, defaultArgs=defaultArgs, onlyGetRunnable=self["instanceOfMenu"])
+        runnable = _EventHandler._registerNewCommand(self, cmd, args, priority, disableArgs=disableArgs, defaultArgs=defaultArgs, onlyGetRunnable=self["instanceOfMenu"])
         if self["instanceOfMenu"]:
             self["widgetProperties"]["command"] = runnable
         elif self["canBePressedByReturn"]:
-            EventHandler._registerNewEvent(self, cmd, EventType.key(Key.RETURN), args, priority=1, disableArgs=disableArgs, defaultArgs=defaultArgs)
+            _EventHandler._registerNewEvent(self, cmd, EventType.key(Key.RETURN), args, priority=1, disableArgs=disableArgs, defaultArgs=defaultArgs)
         return self
     def setImage(self, img:Union[TkImage, PILImage]):
+        """
+        Set the image displayed on the Label.
+        Use either an 'TkImage' or an 'PILImage' instance.
+        @param img:
+        @return:
+        """
         self["widget"]._image = img._get()
         self["widget"]["image"] = self["widget"]._image
         return self
 class OnOffButton(Widget):
+    """
+    Widget:
+    This is a custom Widget.
+    This widget represents a Button wich can be toggled on and off.
+    """
     def __init__(self, _master, group=None, text="", default=False, colorsActive=True, reliefActive=False):
         if isinstance(_master, dict):
             self._data = _master
@@ -2148,22 +3335,69 @@ class OnOffButton(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
-    def setValue(self, v):
+    def setValue(self, v:bool):
+        """
+        Set the state (on/off) as bool.
+        @param v:
+        @return:
+        """
         self["value"] = bool(v)
         self._update()
         return self
-    def getValue(self):
+    def getValue(self)->bool:
+        """
+        Returns the current state as boolean.
+
+        @return:
+        """
         return self["value"]
     def setOn(self):
+        """
+        Set state to True.
+        @return:
+        """
         self["value"] = True
         self._update()
         return self
-    def setOnText(self, text:str):
+    def setOff(self):
+        """
+        Set state to False.
+        @return:
+        """
+        self["value"] = False
+        self._update()
+        return self
+    def setOnText(self, text:Union[str, None]):
+        """
+        Set the text wich is displayed qh´´when state is True.
+        @param text:
+        @return:
+        """
         self["onText"] = str(text)
         self._update()
         return self
-    def setOffText(self, text:str):
+    def setOffText(self, text:Union[str, None]):
+        """
+        Set the text wich is displayed qh´´when state is True.
+        @param text:
+        @return:
+        """
         self["offText"] = str(text)
+        return self
+    def setCommand(self, cmd, args:list=None, priority:int=0, disableArgs=False, defaultArgs=False):
+        """
+        Bind on click event to this widget. Runs given function on trigger.
+        EventValue: None
+        @param cmd: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
+        self["command"] = _EventHandler._getNewEventRunnable(self, cmd, args, priority)
+        _EventHandler._registerNewCommand(self, self._press, args, priority)
+        self._update()
         return self
     def _press(self, e):
         self["value"] = not self["value"]
@@ -2172,11 +3406,6 @@ class OnOffButton(Widget):
         func["value"] = self["value"]
         if func is not None:
             func()
-    def setCommand(self, cmd, args:list=None, priority:int=0, disableArgs=False, defaultArgs=False):
-        self["command"] = EventHandler._getNewEventRunnable(self, cmd, args, priority)
-        EventHandler._registerNewCommand(self, self._press, args, priority)
-        self._update()
-        return self
     def _update(self):
         if self["value"]:
             if self["onText"] is not None: self.setText(self["onText"])
@@ -2188,6 +3417,10 @@ class OnOffButton(Widget):
             if self["relief"]: self.setStyle(Style.RAISED)
         return self["value"]
 class Entry(Widget):
+    """
+    Widget:
+    The Entry is used to ask single line text from the user.
+    """
     def __init__(self, _master, group=None):
         self.getValue = self.getText
         self.setValue = self.setText
@@ -2201,42 +3434,109 @@ class Entry(Widget):
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
     def attachHorizontalScrollBar(self, sc:ScrollBar):
+        """
+        Used to attach a horizontal scrollbar to the Entry.
+        Pass an Scrollbar instance to this method.
+        @param sc:
+        @return:
+        """
         self["xScrollbar"] = sc
         sc["widget"]["orient"] = _tk_.HORIZONTAL
         sc["widget"]["command"] = self._scrollHandler
         self["widget"]["xscrollcommand"] = sc["widget"].set
     def setCursorBlinkDelay(self, d:float):
+        """
+        Set the cursor blinkdelay in seconds.
+        @param d:
+        @return:
+        """
         self._setAttribute("insertofftime",  int(d * 1000))
         self._setAttribute("insertontime", int(d * 1000))
         return self
-    def setCursorColor(self, c: Color):
+    def setCursorColor(self, c:Union[Color, str]):
+        """
+        Set the cursor color.
+        @param c:
+        @return:
+        """
         self._setAttribute("insertbackground", c.value if hasattr(c, "value") else c)
         return self
-    def setCursorThickness(self, i: int):
+    def setCursorThickness(self, i:int):
+        """
+        Set the cursor thickness.
+        @param i:
+        @return:
+        """
         self._setAttribute("insertwidth", i)
         return self
-    def setSelectForeGroundColor(self, c:Color):
+    def setSelectForeGroundColor(self, c:Union[Color, str]):
+        """
+        Set the select foreground color.
+        @param c:
+        @return:
+        """
         self._setAttribute("selectforeground", c.value if hasattr(c, "value") else c)
-    def setSelectBackGroundColor(self, c:Color):
+        return self
+    def setSelectBackGroundColor(self, c:Union[Color, str]):
+        """
+        Set select background color.
+        @param c:
+        @return:
+        """
         self._setAttribute("selectbackground", c.value if hasattr(c, "value") else c)
     def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewEvent(self, func, EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
-        #_EventHandler.registerNewValidateCommand(self, func, [], "all", decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        """
+        Bind on user input event to this widget. Runs given function on trigger.
+
+        @param func: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
+        _EventHandler._registerNewEvent(self, func, EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
     def hideCharactersWith(self, i:str="*"):
+        """
+        Hide all characters that are inputted by the user with given char.
+        The default char ('*') is set by calling this method wthout arguments.
+        Used for password input.
+        @param i:
+        @return:
+        """
         self._setAttribute("show", str(i))
         return self
     def clear(self):
+        """
+        Clears the Entry.
+        @return:
+        """
         self["widget"].delete(0, _tk_.END)
         return self
-    def setText(self, text):
+    def setText(self, text:str):
+        """
+        Overwrites the text content in the Entry.
+        @param text:
+        @return:
+        """
         self.clear()
         self["widget"].insert(0, str(text))
         return self
-    def addText(self, text, index="end"):
+    def addText(self, text:str, index="end"):
+        """
+        Adds the text at 'index', by default at the end.
+        @param text:
+        @param index:
+        @return:
+        """
         self["widget"].insert(index, str(text))
         return self
     def getText(self)->str:
+        """
+        Returns the text content from the Entry.
+        @return:
+        """
         return self["widget"].get()
     def _decryptEvent(self, args):
         return args
@@ -2248,6 +3548,13 @@ class Entry(Widget):
         elif op == 'moveto':
             self["widget"].xview_moveto(howMany)
 class TextEntry(LabelFrame):
+    """
+    Widget:
+    This is a Custom Widget.
+    An Entry and a Label are combined.
+    Used to give the user a hint, what to write in the Entry.
+    Important: First set the Text and THEN place the widget.
+    """
     def __init__(self, _master, group=None, text=""):
         super().__init__(_master, group)
 
@@ -2257,35 +3564,91 @@ class TextEntry(LabelFrame):
             self._addData(_data)
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
-
     def bind(self, func:callable, event: Union[EventType, Key, Mouse, str], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        """
+        Binds a specific event to the Widget. Runs given function on trigger.
+
+        @param cmd: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
         if event == "CANCEL": return
-        EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        _EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
     def updatePlace(self):
         self._data["label"]._get().grid(row=0, column=0)
         self._data["entry"]._get().grid(row=0, column=1, sticky=Anchor.RIGHT.value)
-    def getValue(self):
+    def getValue(self)->str:
+        """
+        Returns the Entry value.
+        @return:
+        """
         return self.getEntry().getValue()
-    def setValue(self, v):
+    def setValue(self, v:str):
+        """
+        Set the Entry value.
+        @param v:
+        @return:
+        """
         self.getEntry().clear()
         self.getEntry().setValue(str(v))
         return self
-    def setText(self, text):
+    def setText(self, text:str):
+        """
+        Set the Label text.
+        @param text:
+        @return:
+        """
         self.getLabel().setText(text)
         return self
     def getEntry(self)->Entry:
+        """
+        Returns the sub Entry.
+        Used for further configuration.
+        @return:
+        """
         return self["entry"]
     def getLabel(self)->Label:
+        """
+        Returns the sub Label.
+        Used for further configuration.
+        @return:
+        """
         return self["label"]
     def clear(self):
+        """
+        Clears the Entry.
+        @return:
+        """
         self.getEntry().clear()
         return self
     def setDisabled(self):
+        """
+        Disables the Entry.
+        @return:
+        """
         self.getEntry().setDisabled()
+        return self
     def setEnabled(self):
+        """
+        Enables the Entry.
+        @return:
+        """
         self.getEntry().setEnabled()
+        return self
     def place(self, x=0, y=0, width=None, height=25, anchor=Anchor.UP_LEFT, entryStartX=None):
+        """
+        @param x:
+        @param y:
+        @param width:
+        @param height:
+        @param anchor:
+        @param entryStartX: Use this to force lineup different Entrys
+        @return:
+        """
         offset = 5
         self._place(x, y, 200, height, anchor)
         self._data["label"].place(0, 0)
@@ -2301,12 +3664,30 @@ class TextEntry(LabelFrame):
         self._place(x, y, width, height, anchor)
         return self
     def placeRelative(self, fixX=None, fixY=None, fixWidth=None, fixHeight=None, xOffset=0, yOffset=0, xOffsetLeft=0, xOffsetRight=0, yOffsetUp=0, yOffsetDown=0, stickRight=False, stickDown=False, centerY=False, centerX=False, changeX=0, changeY=0, changeWidth=0, changeHeight=0, nextTo=None, updateOnResize=True):
-        raise NotImplemented("Text Entry: place relative is currently not implemented!")
-        #return self
-
+        assert fixWidth is not None and fixHeight is not None, "fixWidth and fixHeight must be defined!"
+        x = fixX if fixX is not None else 0
+        y = fixY if fixY is not None else 0
+        self.place(x, y, fixWidth, fixHeight)
+        super().placeRelative(fixX, fixY, fixWidth, fixHeight, xOffset, yOffset, xOffsetLeft, xOffsetRight, yOffsetUp, yOffsetDown, stickRight, stickDown, centerY, centerX, changeX, changeY, changeWidth, changeHeight, nextTo, updateOnResize)
+        return self
+    def setFg(self, col:Union[Color, str]):
+        self.getEntry().setFg(col)
+        self.getLabel().setFg(col)
+        return self
+    def setBg(self, col:Union[Color, str]):
+        self.getEntry().setBg(col)
+        self.getLabel().setBg(col)
+        return self
     def _get(self):
         return self["widget"]
 class TextDropdownMenu(Widget):
+    """
+    Widget:
+    This is a Custom Widget.
+    A DropdownMenu and a Label is combined together.
+    Used to give the user an hint, what to write in the DropdownMenu.
+    Importaint: First set the Text and THEN place the widget.
+    """
     def __init__(self, _master, group=None, text=""):
         if isinstance(_master, dict):
             self._data = _master
@@ -2323,37 +3704,89 @@ class TextDropdownMenu(Widget):
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
     def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
+        """
+        Binds a specific event to the Widget. Runs given function on trigger.
+
+        @param cmd: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
         if event == "CANCEL": return
-        EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        _EventHandler._registerNewEvent(self, func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
-    def getValue(self):
+    def getValue(self)->str:
+        """
+        Returns Dropdownmenu content.
+        @return:
+        """
         return self.getDropdownMenu().getValue()
-    def setValue(self, v):
+    def setValue(self, v:str):
+        """
+        Set the DropdownMenu value.
+        @param v:
+        @return:
+        """
         self.getDropdownMenu().setValue(str(v))
+        return self
     def getLabel(self):
+        """
+        Returns the sub Label.
+        Used for further configuration.
+        @return:
+        """
         return Label(self["label"])
     def getDropdownMenu(self):
+        """
+        Returns the sub DropdownMenu.
+        Used for further configuration.
+        @return:
+        """
         return DropdownMenu(self["dropdownMenu"])
     def setDisabled(self):
+        """
+        Disables the DropdownMenu.
+        @return:
+        """
         self.getDropdownMenu().setDisabled()
+        return self
     def setEnabled(self):
+        """
+        Enables the DropdownMenu.
+        @return:
+        """
         self.getDropdownMenu().setEnabled()
+        return self
     def _get(self):
         return self["widget"]._get()
 class Listbox(Widget):
-    SINGLE = "single"
-    MULTIPLE = "multiple"
-    def __init__(self, _master, group=None, mode=SINGLE):
+    """
+    Widget:
+    The user can select one (Default) or multiple items.
+    A Scrollbar can also be added.
+
+    """
+    def __init__(self, _master, group=None):
         if isinstance(_master, dict):
             self._data = _master
         elif isinstance(_master, self.__class__):
             self._data = _master._data
         elif isinstance(_master, Tk) or isinstance(_master, NotebookTab) or isinstance(_master, Canvas) or isinstance(_master, Frame) or isinstance(_master, LabelFrame):
-            self._data = {"master":_master,  "widget":_tk_.Listbox(_master._get()), "selectionMode":mode, "init":{"selectmode":mode}, "default_color":Color.DEFAULT}
+            self._data = {"master":_master,  "widget":_tk_.Listbox(_master._get()), "selectionMode":"single", "init":{"selectmode":"single"}, "default_color":Color.DEFAULT}
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
+    def __len__(self):
+        return self.length()
     def bindArrowKeys(self, widget=None, ifNoSelectionSelect0=True):
+        """
+        The arrowkeys get bound to navigate up and down via the arrowkeys.
+        @param widget: bind to given widget (Default = self)
+        @param ifNoSelectionSelect0: Select on arrowkeys index zero if none is selected
+        @return:
+        """
         def _up(e):
             if self["placed"]:
                 selected = self.getSelectedIndex()
@@ -2382,38 +3815,89 @@ class Listbox(Widget):
                 self.see(selected)
                 self["widget"].event_generate("<<ListboxSelect>>")
         if widget is None: widget = self
-        EventHandler._registerNewEvent(widget, _down, EventType.ARROW_DOWN, [], 0)
-        EventHandler._registerNewEvent(widget, _up, EventType.ARROW_UP, [], 0)
-    def see(self, index):
+        _EventHandler._registerNewEvent(widget, _down, EventType.ARROW_DOWN, [], 0)
+        _EventHandler._registerNewEvent(widget, _up, EventType.ARROW_UP, [], 0)
+    def see(self, index:Union[float, str]):
+        """
+        Adjust the position of the listbox so that the line referred to by index is visible.
+        'end' for scroll to end.
+        @param index:
+        @return:
+        """
         self["widget"].see(index)
         return self
-    def setSelectForeGroundColor(self, c: Color):
+    def setSelectForeGroundColor(self, c:Union[Color, str]):
+        """
+        Foregroundcolor applied if item is selected.
+        @param c:
+        @return:
+        """
         self._setAttribute("selectforeground", c.value if hasattr(c, "value") else c)
-    def setSelectBackGroundColor(self, c: Color):
+    def setSelectBackGroundColor(self, c:Union[Color, str]):
+        """
+        Backgroundcolor applied if item is selected.
+        @param c:
+        @return:
+        """
         self._setAttribute("selectbackground", c.value if hasattr(c, "value") else c)
     def attachVerticalScrollBar(self, sc:ScrollBar):
+        """
+        Used to attach a vertical scrollbar to the Entry.
+        Pass an Scrollbar instance to this method.
+        @param sc:
+        @return:
+        """
         self["yScrollbar"] = sc
         sc["widget"]["orient"] = _tk_.VERTICAL
         sc["widget"]["command"] = self["widget"].yview
         self["widget"]["yscrollcommand"] = sc["widget"].set
         return self
     def clearSelection(self):
+        """
+        Clears the selection.
+        @return:
+        """
         self["widget"].selection_clear(0, "end")
     def setMultipleSelect(self):
+        """
+        Set the Listbox in 'multiselectmode'.
+        The User can select more than one item.
+        @return:
+        """
         self._setAttribute("selectmode", "multiple")
         return self
     def setSingleSelect(self):
+        """
+        Set the Listbox in 'singleselectmode'.
+        The User can select only one item.
+        This is the DEFAULT mode.
+        @return:
+        """
         self._setAttribute("selectmode", "single")
         return self
     def add(self, entry:str, index = "end", color:Union[Color, str]=None):
+        """
+        Adds an entry to the Listbox.
+        For large amount of items the 'addAll' method is way faster!
+        @param entry: entry content as string
+        @param index: where to insert. At the end by default.
+        @param color: Background color of this item.
+        @return:
+        """
         self["widget"].insert(index, str(entry))
-
         color = color if color is not None else self["default_color"]
-
         if len(self.getAllSlots()) != 0:
             self.setSlotBg((self.length()-1 if index=="end" else index), color)
         return self
     def addAll(self, entry:[str], index="end", color:Union[Color, str]=None):
+        """
+        Adds a list of entrys to the Listbox.
+        When adding large amounts of items this is way faster than 'add' method and a for loop.
+        @param entry: entry content as string
+        @param index: where to insert. At the end by default.
+        @param color: Background color of this item.
+        @return:
+        """
         color = color if color is not None else self["default_color"]
         if entry is None: return self
         if color == Color.WHITE:
@@ -2426,77 +3910,162 @@ class Listbox(Widget):
                     self.setSlotBg(self.length()-1, color)
                 self.updateIdleTasks()
         return self
-    def length(self):
+    def length(self)->int:
+        """
+        Returns the amount of items in Listbox.
+        @return:
+        """
         return self["widget"].size()
     def clear(self):
+        """
+        Removes all items from Listbox.
+        @return:
+        """
         self["widget"].delete(0, _tk_.END)
         return self
-    def setSlotBgDefault(self, color:Color=Color.WHITE):
+    def setSlotBgDefault(self, color:Union[Color, str]=Color.WHITE):
         """
         Sets the default color of new added Items.
-
-
         @param color:
         @return:
         """
         self["default_color"] = color.value if hasattr(color, "value") else color
         return self
-    def setSlotBgAll(self, color:Color=Color.WHITE):
+    def setSlotBgAll(self, color:Union[Color, str]=Color.WHITE):
+        """
+        Set the Backgroundcolor of all slots.
+        This can be slow.
+        Better is to set the color while adding.
+        @param color:
+        @return:
+        """
         for i in self.getAllSlotIndexes():
             self.setSlotBg(i, color)
         return self
-    def setItemSelectedByIndex(self, index, clearFirst=True):
+    def setSlotBg(self, index:int, col: Color = Color.WHITE):
+        """
+        Set backgroundcolor of item an given index.
+        @param index:
+        @param col:
+        @return:
+        """
+        self["widget"].itemconfig(index, bg=col.value if hasattr(col, "value") else col)
+        return self
+    def setItemSelectedByIndex(self, index:int, clearFirst=True):
+        """
+        Set an item selected by given index.
+        @param index:
+        @param clearFirst: clears the old selection before setting the new.
+        @return:
+        """
         if clearFirst: self["widget"].selection_clear(0, "end")
         self["widget"].select_set(index)
-        #self["widget"].activate(index)
         return self
-    def setItemSelectedByName(self, name, clearFirst=True):
+    def setItemSelectedByName(self, name:str, clearFirst=True):
+        """
+        Set the first item with given name selected.
+        @param name:
+        @param clearFirst: clears the old selection before setting the new.
+        @return:
+        """
         if clearFirst: self["widget"].selection_clear(0, "end")
         if name in self.getAllSlots():
             self.setItemSelectedByIndex(self.getAllSlots().index(name))
         return self
-    def deleteItemByIndex(self, index):
+    def deleteItemByIndex(self, index:int):
+        """
+        Deletes an item by given index
+        @param index:
+        @return:
+        """
         self["widget"].delete(index)
         return self
     def deleteItemByName(self, name):
+        """
+        Deletes the first item by given name.
+        @param name:
+        @return:
+        """
         self.deleteItemByIndex(self.getAllSlots().index(name))
-    def getIndexByName(self, item):
-        return self.getAllSlots().index(item)
-    def getNameByIndex(self, index):
+    def getIndexByName(self, name:str):
+        """
+        Returns the (first) index by given name.
+        @param name:
+        @return:
+        """
+        return self.getAllSlots().index(name)
+    def getNameByIndex(self, index:int):
+        """
+        Returns the name by given index.
+        @param index: 
+        @return: 
+        """
         return self.getAllSlots()[index]
-    def getSelectedIndex(self):
-        if self["selectionMode"] == Listbox.SINGLE:
+    def getSelectedIndex(self)->Union[list, int, None]:
+        """
+        Returns selected index/indices.
+        If selectionmode is 'single' -> returns int / None
+        If selectionmode is 'multiple' -> returns list / None
+        @return:
+        """
+        if self["selectionMode"] == "single":
             if len(self["widget"].curselection()) == 0: return None
             return int(self["widget"].curselection()[0])
         else:
             return [int(i) for i in self["widget"].curselection()]
-    def getSelectedItem(self):
+    def getSelectedItem(self)->Union[List[str], str, None]:
+        """
+        Returns selected item/items.
+        If selectionmode is 'single' -> returns str / None
+        If selectionmode is 'multiple' -> returns list / None
+        @return:
+        """
         index = self.getSelectedIndex()
         if index is None: return None
         if type(index) == int:
             return self.getNameByIndex(index)
         else:
             return [self.getNameByIndex(i) for i in index]
-    def setSlotBg(self, index, col:Color=Color.WHITE):
-        self["widget"].itemconfig(index, bg=col.value if hasattr(col, "value") else col)
-        return self
-    def getAllSlotIndexes(self):
+
+    def getAllSlotIndexes(self)->List[int]:
+        """
+        Returns a list of indices for every item in Listbox.
+        @return:
+        """
         return [i for i in range(self.length())]
-    def getAllSlots(self):
+    def getAllSlots(self)->List[str]:
+        """
+        Returns a list containing all items.
+        @return:
+        """
         return [self["widget"].get(i) for i in range(self.length())]
     def onSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewEvent(self, func, EventType.LISTBOX_SELECT, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+        """
+        Binds on select event to the Widget. Runs given function on trigger.
+
+        @param func: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, it's possible to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
+        _EventHandler._registerNewEvent(self, func, EventType.LISTBOX_SELECT, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
     def _decryptEvent(self, args):
         try:
             w = args.widget
-            if self["selectionMode"] == Listbox.SINGLE:
+            if self["selectionMode"] == "single":
                 return w.get(int(w.curselection()[0]))
             else:
                 return [w.get(int(i)) for i in w.curselection()]
         except:
             return "CANCEL"
 class Scale(Widget):
-    def __init__(self, _master, from_=0, to=100, group=None, orient:Orient=Orient.HORIZONTAL):
+    """
+    Widget:
+    Adds a Slider to set values from specified value range.
+    """
+    def __init__(self, _master, group=None, from_=0, to=100, orient:Orient=Orient.HORIZONTAL):
         self.setResolution = self.setSteps
         if isinstance(_master, dict):
             self._data = _master
@@ -2508,39 +4077,102 @@ class Scale(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
-    def getValue(self):
+    def getValue(self)->float:
+        """
+        Returns the selected value.
+        @return:
+        """
         return self["var"].get()
-    def setValue(self, v):
+    def setValue(self, v:float):
+        """
+        Set scale value.
+        @param v:
+        @return:
+        """
         self["var"].set(v)
         return self
-    def getSlideLocation(self, value=None):
+    def getSlideLocation(self, value=None)->Location2D:
+        """
+        Returns the slider location on screen.
+        @param value: if None current scale value is taken
+        @return:
+        """
         if value is None: value = self.getValue()
         return Location2D(self["widget"].coords(value))
-    def setIntervalIndicators(self, i:float=-1):
+    def setIntervalIndicators(self, i:float):
+        """
+        Set the indicator interval.
+        @param i: interval
+        @return:
+        """
         self._setAttribute("tickinterval", i)
         return self
     def setSliderBg(self, color:Color):
+        """
+        Set the slider background color.
+        @param color:
+        @return:
+        """
         self._setAttribute("troughcolor", color.value if hasattr(color, "value") else color)
         return self
-    def setText(self, text):
+    def setText(self, text:str):
+        """
+        Set info text above Scale.
+        @param text:
+        @return:
+        """
         self._setAttribute("label", str(text))
     def setValueVisible(self, b:bool=True):
+        """
+        Set value above the scale visible or hidden.
+        @param b:
+        @return:
+        """
         self._setAttribute("showvalue", b)
         return self
     def setSliderWidth(self, i:int=30):
+        """
+        Set slider Width.
+        Default is 30.
+        @param i:
+        @return:
+        """
         self._setAttribute("sliderlength", i)
         return self
     def setStyle(self, style:Style=Style.RAISED):
+        """
+        Set scale style.
+        @param style:
+        @return:
+        """
         self._setAttribute("sliderrelief", style.value if hasattr(style, "value") else style)
     def setSteps(self, s:Union[int, float]=1):
+        """
+        Set slider steps.
+        Steps s steps when clicking next to the slider.
+        @param s:
+        @return:
+        """
         self._setAttribute("resolution", s)
         return self
     def onScroll(self, func, args:list=None, priority:int=0):
-        EventHandler._registerNewCommand(self, func, args, priority, decryptValueFunc=self._decryptValue)
+        """
+        Binds on scale scroll event to the Widget. Runs given function on trigger.
+
+        @param func: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possible to set priorities.
+        @return:
+        """
+        _EventHandler._registerNewCommand(self, func, args, priority, decryptValueFunc=self._decryptValue)
         return self
     def _decryptValue(self, a=None):
         return self.getValue()
 class Progressbar(Widget):
+    """
+    Widget:
+    Creates a Processbar to indicate process.
+    """
     def __init__(self, _master, group=None, values:int=100):
         if isinstance(_master, dict):
             self._data = _master
@@ -2552,14 +4184,32 @@ class Progressbar(Widget):
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
     def setNormalMode(self):
+        """
+        Set the Processbar to normal mode.
+        It can fill from 0 to 100%.
+        @return:
+        """
         self["widget"].stop()
         self._setAttribute("mode", "determinate")
         return self
     def setAutomaticMode(self, delay=0.01):
+        """
+        Set the Processbar to automatic mode.
+        The green Bar jumps back and forth.
+        One cycle takes delay seconds.
+        @param delay:
+        @return:
+        """
         self._setAttribute("mode", "indeterminate")
         self["widget"].start(int(delay*1000))
         return self
     def iter(self, reset=True):
+        """
+        A for loop can be used to 'iter' through the processbar.
+        The for loop index are the steps from the Processbar.
+        @param reset: if the Processbar should be set to zero before.
+        @return:
+        """
         if reset:
             v = self["values"]
             self.reset()
@@ -2569,39 +4219,85 @@ class Progressbar(Widget):
             self.addValue()
             yield i
     def setOrient(self, o:Orient):
+        """
+        Set the Processbar orientation using the Orient enum.
+        Vertical or Horizontal.
+        @param o:
+        @return:
+        """
         self._setAttribute("orient", o.value if hasattr(o, "value") else o)
         return self
-    def setValues(self, val):
+    def setValues(self, val:int):
+        """
+        Set the max Value.
+        Value range 0 to 'val'
+        @param val:
+        @return:
+        """
         self["values"] = int(val)
     def update(self):
+        """
+        Updates the Processbar.
+        @return:
+        """
         self._setAttribute("value", int((self["value"] / self["values"]) * 100))
-        self["widget"].update()
+        super().update()
+        return self
     def addValue(self, v=1):
+        """
+        Adds a value to the processbar.
+        Default maxvalue is 100 (full Processbar).
+        Can be chnged by using 'setValues' method.
+        @param v:
+        @return:
+        """
         if self["values"] >= self["value"]+v:
             self["value"] += v
             self._setAttribute("value", int((self["value"] / self["values"]) * 100))
-    def isFull(self):
+        return self
+    def isFull(self)->bool:
+        """
+        Returns a boolean if the Processbar is full.
+        @return:
+        """
         return self["values"] <= self["value"]
     def reset(self):
         """
         Sets the bar progress to 0.
-
+        Processbar is empty.
         @return:
         """
         self._setAttribute("value", 0)
         self["value"] = 0
-    def setValue(self, v):
+        return self
+    def setValue(self, v:int):
+        """
+        Set the Processbar percentage by value.
+        Default maxvalue is 100 (full Processbar).
+        Can be chnged by using 'setValues' method.
+        @param v:
+        @return:
+        """
         if self["values"] >= v:
             self["value"] = v
             self._setAttribute("value", int((self["value"] / self["values"]) * 100))
-    def setPercentage(self, p):
+        return self
+    def setPercentage(self, p:Union[float, int]):
+        """
+        Set Processbar percentage,
+        Format can be (float) '0.5' -> 50%
+        Format can be (int) '50' -> 50%
+        @param p:
+        @return:
+        """
         if str(p).startswith("0."):
             p *= 100
         self._setAttribute("value", p)
         self["value"] = p / 100 * self["values"]
+        return self
 class _ScrolledText(_tk_.Text):
     """
-    Pivate implenetation of tkinter.scrolledtext.ScrolledText
+    Private implementation of tkinter.scrolledtext.ScrolledText
 
     use ttk.Scrollbar
 
@@ -2615,7 +4311,7 @@ class _ScrolledText(_tk_.Text):
         _tk_.Text.__init__(self, self.frame, **kw)
         self.pack(side=_tk_.LEFT, fill=_tk_.BOTH, expand=True)
         self.vbar['command'] = self.yview
-
+        # hack by https://github.com/enthought/Python-2.7.3/blob/master/Lib/lib-tk/ScrolledText.py
         # Copy geometry methods of self.frame without overriding Text
         # methods -- hack!
         text_meths = vars(Text).keys()
@@ -2625,10 +4321,16 @@ class _ScrolledText(_tk_.Text):
         for m in methods:
             if m[0] != '_' and m != 'config' and m != 'configure':
                 setattr(self, m, getattr(self.frame, m))
-
     def __str__(self):
         return str(self.frame)
 class Text(Widget):
+    """
+    Widget:
+    Textbox where the user can input Text.
+    Can also be user to display multiline text.
+    Text widget can be made read only.
+    Colors and font can be changed individually.
+    """
     def __init__(self, _master, group=None, readOnly=False, forceScroll=False, scrollAble=False):
         self.getContent = self.getText
         if isinstance(_master, dict):
@@ -2640,21 +4342,43 @@ class Text(Widget):
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
-    def addLine(self, text, color="black"):
+    def addLine(self, text:str, color:Union[Color, str]="black"):
+        """
+        Adds a Line of text to the Textbox widget.
+        @param text:
+        @param color: color of that line. Default: BLACK
+        @return:
+        """
         if not text.endswith("\n"): text = text+"\n"
         self.addText(text, color)
         return self
-    def addLineWithTimeStamp(self, text, color="black"):
+    def addLineWithTimeStamp(self, text:str, color:Union[Color, str]="black"):
+        """
+        Adds a Line of text with a timestamp to the Textbox widget.
+        @param text:
+        @param color:
+        @return:
+        """
         if not text.endswith("\n"): text = text+"\n"
         self.addText(t.strftime("[%H:%M:%S]: ")+text, color)
         return self
-    def setStrf(self, text):
+    def setStrf(self, text:str):
+        """
+        Clears the Text.
+        View 'Text.addStrf' for further information.
+        @param text:
+        @return:
+        """
         self.clear()
         self.addStrf(text)
         return self
 
-    def addStrf(self, text):
+    def addStrf(self, text:str):
         """
+        Adds text to the Textbox.
+        This text can be colored by using following color codes in the string.
+
+        Color-Codes:
         §D: DEFAULT
         §W: WHITE
         §B: BLACK
@@ -2666,12 +4390,11 @@ class Text(Widget):
         §y: YELLOW
         §m: MAGENTA
 
-        §rgb(r, g, b)
-
         @param text:
         @return:
         """
-
+        #TODO add font
+        #TODO add §rgb(r, g, b)
         colors = {'D':Color.DEFAULT,
                   'W':Color.WHITE,
                   'B':Color.BLACK,
@@ -2682,11 +4405,6 @@ class Text(Widget):
                   'y':Color.YELLOW,
                   'm':Color.MAGENTA,
                   'o':Color.ORANGE}
-
-        """
-        Copying ... items from §bBilder§B to §bDesktop
-                               | 24    | 29  | 33
-        """
 
         _text = text
         for i in ['§D', '§W', '§B', '§r', '§g', '§b', '§c', '§y', '§m', '§o']:
@@ -2715,13 +4433,25 @@ class Text(Widget):
             firstMarkerChar = int(secondMarker.split(".")[1])  # += len(textSection.split("\n")[-1])-1
 
 
-    def setText(self, text):
+    def setText(self, text:str):
+        """
+        Overwrites the text with 'text'.
+        @param text:
+        @return:
+        """
         self.clear()
         self.addText(text)
         return self
 
 
-    def addText(self, text, color="black"):
+    def addText(self, text:str, color:Union[Color, str]="black"):
+        """
+        Adds text to the Text box.
+        Can be colored. Default: BLACK
+        @param text:
+        @param color:
+        @return:
+        """
         color = color.value if hasattr(color, "value") else color
         disableAfterWrite=False
         #if text.endswith("\n"):
@@ -2740,21 +4470,25 @@ class Text(Widget):
         if disableAfterWrite:
             self.setDisabled()
         return self
-    def addTextFromFile(self, path, clearFirst=True):
-        if os.path.exists(path):
-            if clearFirst: self.clear()
-            file = open(path, "r")
-            for line in file:
-                self.addText(line)
-            file.close()
-        else:
-            TKExceptions.PathNotExisits("Cannot pull content from this file: "+path)
     def getText(self)->str:
+        """
+        Returns Text content.
+        @return:
+        """
         return self["widget"].get(0.0, "end")
     def scrollDown(self):
+        """
+        Scrolls all the way down.
+        Redundant to: 'Text.see("end")'
+        @return:
+        """
         self["widget"].see("end")
         return self
     def clear(self):
+        """
+        Clears the Textbox.
+        @return:
+        """
         disableAfterWrite = False
         if self["widgetProperties"]["state"] == "disabled":
             self.setEnabled()
@@ -2766,37 +4500,92 @@ class Text(Widget):
         if disableAfterWrite:
             self.setDisabled()
         return self
-    def getSelectedText(self):
+    def getSelectedText(self)->Union[str, None]:
+        """
+        Returns the selected text.
+        Returns None if no text is selected.
+        @return:
+        """
         try:
             return self["widget"].get("sel.first", "sel.last")
         except _tk_.TclError:
             return None
     def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewEvent(self, func, EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        """
+        Binds on user input event to the widget. Runs given function on trigger.
+
+        @param func: function get called on trigger
+        @param args: Additional arguments as List.
+        @param priority: If several equal events are bound, its possibe to set priorities.
+        @param defaultArgs: if True the default tkinter gets passed in bound function instead of Event-instance.
+        @param disableArgs: if True no args gets passed.
+        @return:
+        """
+        _EventHandler._registerNewEvent(self, func, EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
         #_EventHandler.registerNewValidateCommand(self, func, [], "all", decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
-    def setSelectForeGroundColor(self, c:Color):
+        return self
+    def setSelectForeGroundColor(self, c:Union[Color, str]):
+        """
+        Set select foregroundcolor.
+        @param c:
+        @return:
+        """
         self._setAttribute("selectforeground", c.value if hasattr(c, "value") else c)
-    def setSelectBackGroundColor(self, c:Color):
+    def setSelectBackGroundColor(self, c:Union[Color, str]):
+        """
+        Set select background color.
+        @param c:
+        @return:
+        """
         self._setAttribute("selectbackground", c.value if hasattr(c, "value") else c)
-    def setCursorColor(self, c:Color):
+    def setCursorColor(self, c:Union[Color, str]):
+        """
+        Set cursor color.
+        @param c:
+        @return:
+        """
         self._setAttribute("insertbackground", c.value if hasattr(c, "value") else c)
         return self
     def setCursorThickness(self, i:int):
+        """
+        Set Cursor thickness.
+        @param i:
+        @return:
+        """
         self._setAttribute("insertwidth", i)
         return self
     def setCursorBlinkDelay(self, d:float):
+        """
+        Set Cursor blink delay in seconds.
+        @param d:
+        @return:
+        """
         self._setAttribute("insertofftime",  int(d * 1000))
         self._setAttribute("insertontime", int(d * 1000))
         return self
     def setUndo(self, b:bool, maxUndo=-1):
+        """
+        Enables or disables the Ctrl+Z / Ctrl+y undo/redo functionallity.
+        Default: DISABLED
+        @param b:
+        @param maxUndo: how many undo opperations are saved in stack. -1 for infinite
+        @return:
+        """
         self._setAttribute("undo", int(b))
         self._setAttribute("maxundo", maxUndo)
         return self
     def setWrapping(self, w:Wrap):
+        """
+        Set text wrapping using 'Wrap' enum.
+        Default: NONE
+        @param w:
+        @return:
+        """
         self._setAttribute("wrap", w.value if hasattr(w, "value") else w)
         return self
     def _decryptEvent(self, args):
         return self.getText()
+#continue!
 class _SubFolder:
     def __init__(self, parent, _data):
         self._parent = parent
@@ -2838,8 +4627,6 @@ class TreeViewElement:
     def setImage(self):
         pass
     def setFg(self, color:str | Color):
-
-
         return self
     def getIndex(self):
         pass
@@ -2865,16 +4652,16 @@ class TreeView(Widget):
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
     def onDoubleSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewEvent(self, func, Mouse.DOUBBLE_LEFT, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+        _EventHandler._registerNewEvent(self, func, Mouse.DOUBBLE_LEFT, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
     def onSingleSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewEvent(self, func, Mouse.LEFT_CLICK_RELEASE, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self.__decryptEvent)
+        _EventHandler._registerNewEvent(self, func, Mouse.LEFT_CLICK_RELEASE, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self.__decryptEvent)
     def onArrowKeySelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False, bindToOtherWidget=None):
         widget = self
         if bindToOtherWidget is not None:
             widget = bindToOtherWidget
 
-        EventHandler._registerNewEvent(widget, func, EventType.KEY_UP + EventType.ARROW_UP, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self.__decryptEvent)
-        EventHandler._registerNewEvent(widget, func, EventType.KEY_UP + EventType.ARROW_DOWN, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self.__decryptEvent)
+        _EventHandler._registerNewEvent(widget, func, EventType.KEY_UP + EventType.ARROW_UP, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self.__decryptEvent)
+        _EventHandler._registerNewEvent(widget, func, EventType.KEY_UP + EventType.ARROW_DOWN, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self.__decryptEvent)
     def attachVerticalScrollBar(self, sc: ScrollBar):
         self["yScrollbar"] = sc
         sc["widget"]["orient"] = _tk_.VERTICAL
@@ -3000,7 +4787,7 @@ class TreeView(Widget):
             self["widget"].see(self._getIds()[index])
         return self
     def onSelectHeader(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False, useIndex=False):
-        self["onHeaderClick"] = EventHandler._getNewEventRunnable(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        self["onHeaderClick"] = _EventHandler._getNewEventRunnable(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
         self["use_index"] = useIndex
         return self
     def _clickHeader(self, hName):
@@ -3058,9 +4845,9 @@ class SpinBox(Widget):
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
         super().__init__(self, self._data, group)
     def onButtonClick(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewCommand(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+        _EventHandler._registerNewCommand(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
     def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewEvent(self, func, EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        _EventHandler._registerNewEvent(self, func, EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
     def setValue(self, v, clearFirst=True):
         disableAfterWrite = False
         if self["readonly"]:
@@ -3131,13 +4918,13 @@ class DropdownMenu(Widget):
             self._setAttribute("state", "normal")
         return self
     def onSelectEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewEvent(self, func, EventType.COMBOBOX_SELECT, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
+        _EventHandler._registerNewEvent(self, func, EventType.COMBOBOX_SELECT, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, decryptValueFunc=self._decryptEvent)
         return self
     def onDropdownExpand(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewCommand(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, cmd="postcommand")
+        _EventHandler._registerNewCommand(self, func, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs, cmd="postcommand")
         return self
     def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
-        EventHandler._registerNewValidateCommand(self, func, args, priority, "all", decryptValueFunc=self._decryptEvent2, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        _EventHandler._registerNewValidateCommand(self, func, args, priority, "all", decryptValueFunc=self._decryptEvent2, defaultArgs=defaultArgs, disableArgs=disableArgs)
         return self
     def setValueByIndex(self, i:int):
         disableAfterWrite = False
@@ -3298,7 +5085,7 @@ class ContextMenu(Widget):
             self._data = _master._data
         elif hasattr(_master, "_get"):
             self._data = {"master": _master,  "widget": _tk_.Menu(_master._get(), tearoff=0), "subMenu":[], "closable":closable, "eventType":eventType, "group":group}
-            if eventType is not None: EventHandler._registerNewEvent(_master, self.open, eventType, [], 1, decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
+            if eventType is not None: _EventHandler._registerNewEvent(_master, self.open, eventType, [], 1, decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
             self._data["mainSubMenu"] = self._createSubMenu()
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be "+str(self.__class__.__name__)+", Frame or Tk instance not: "+str(_master.__class__.__name__))
@@ -3314,7 +5101,7 @@ class ContextMenu(Widget):
     def createSubMenu(self, button:Button)->_SubMenu:
         return self["mainSubMenu"].createSubMenu(button, self["group"])
     def bindToWidget(self, widg):
-        EventHandler._registerNewEvent(widg, self.open, self["eventType"], [], 1, decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
+        _EventHandler._registerNewEvent(widg, self.open, self["eventType"], [], 1, decryptValueFunc=self._decryptEvent, defaultArgs=False, disableArgs=False)
     def open(self, loc:Location2D | Event):
         if isinstance(loc, Event):
             if loc.getValue() is not None:
@@ -3414,7 +5201,7 @@ class Notebook(Widget):
     def _init(self):
         self.onTabSelectEvent(self._updateTab)
     def onTabSelectEvent(self, func, args:list=None, priority:int=0, disableArgs=False, defaultArgs=False):
-        EventHandler._registerNewEvent(self, func, EventType.customEvent("<<NotebookTabChanged>>"), args, priority, decryptValueFunc=self._decryptEvent, disableArgs=disableArgs, defaultArgs=defaultArgs)
+        _EventHandler._registerNewEvent(self, func, EventType.customEvent("<<NotebookTabChanged>>"), args, priority, decryptValueFunc=self._decryptEvent, disableArgs=disableArgs, defaultArgs=defaultArgs)
     def setCtrlTabEnabled(self):
         self["widget"].enable_traversal()
         return self
@@ -3472,7 +5259,7 @@ class Notebook(Widget):
     def getStyle(self):
         return Notebook._STYLE
     def onCloseEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False, getIdInsteadOfName=True):
-        runnable = EventHandler._getNewEventRunnable(self, func, args, priority, decryptValueFunc=self._decryptValueID if getIdInsteadOfName else self._decryptValueNAME, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        runnable = _EventHandler._getNewEventRunnable(self, func, args, priority, decryptValueFunc=self._decryptValueID if getIdInsteadOfName else self._decryptValueNAME, defaultArgs=defaultArgs, disableArgs=disableArgs)
         self["runnable"] = runnable
     def _decryptValueID(self, e):
         return self._active
@@ -3509,6 +5296,7 @@ class Notebook(Widget):
         index = self["widget"].index("@%d,%d" % (event.x, event.y))
         self._name = self["widget"].tab(index, "text")
         _event = _call(self["runnable"])
+        if not len(_event._data): return
         if self._active == index and (self["runnable"] is None or (self["runnable"] is not None and not _event["setCanceled"])):
             if self["destroyed"]: return
             self["widget"].forget(index)
@@ -3541,12 +5329,7 @@ class Notebook(Widget):
         super().destroy()
         for tab in self["tabIndexList"]:  # destroy all tabs
             tab.destroy()
-class CustomStyle:
-    def __init__(self, master, widget):
-        self._data = {"master":master, "widget":widget}
 
-    def getType(self):
-        return self._data["widget"]._get().winfo_class()
 
 class Canvas(Widget):
     def __init__(self, _master, group=None):
@@ -3562,6 +5345,141 @@ class Canvas(Widget):
     def clear(self):
         for i in list(self["canObjs"].values()).copy():
             i.destroy()
+
+class _DndHandler:
+    def __init__(self, canvas, _id, widget, widgetCreator):
+        self.canvas = canvas
+        self.widget = widget
+        self.widgetCreator = widgetCreator
+        self.id = _id
+    def press(self, event:Event):
+        tkArgs = event.getTkArgs()
+        event.printEventInfo()
+        if _dnd.dnd_start(self, tkArgs):
+            self.x_off = tkArgs.x
+            self.y_off = tkArgs.y
+    def dnd_end(self, target, event):
+        pass
+    def getWidgetCursorPos(self, event, canvas)->Location2D:
+        # widget position relative to the screen
+        rsx, rsy = canvas.getRelScreenPos()
+
+        # pointer relative to the canvas
+        return Location2D(
+            (event.x_root - rsx) - self.x_off,
+            (event.y_root - rsy) - self.y_off,
+        )
+
+class DndCanvas(Canvas):
+    def __init__(self, _master, group=None):
+        super().__init__(_master, group)
+        canvas = self._get()
+        canvas.dnd_accept = self._onDndWidget
+        self._outlineID = None
+        self["hide_widg_on_drag"] = False
+        self["drag_enabled"] = True
+        # register "private" methods
+        setattr(self, "dnd_accept", self._onDndWidget)
+        setattr(self, "dnd_enter", self._onDndEnter)
+        setattr(self, "dnd_motion", self._onDndMotion)
+        setattr(self, "dnd_leave", self._onDndLeave)
+        setattr(self, "dnd_commit", self._onDndCommit)
+    def _onDndWidget(self, dndHandl, event):
+        return self if self["drag_enabled"] else None
+    def _onDndEnter(self, dndHandl, event):
+        self.setFocus()
+        rsx, rsy = dndHandl.getWidgetCursorPos(event, self)
+        x1, y1, x2, y2 = dndHandl.canvas._get().bbox(dndHandl.id) # WICHTIG .id impl
+
+        canvasRect = Rect(
+            Location2D(x1, y1),
+            Location2D(x2, y2)
+        )
+        self._outlineID = self["widget"].create_rectangle(rsx, rsy, rsx+canvasRect.getWidth(), rsy+canvasRect.getHeight())
+        self._onDndMotion(dndHandl, event)
+    def _onDndMotion(self, dndHandl, event):
+        if self["hide_widg_on_drag"]: dndHandl.canvas._get().itemconfigure(dndHandl.id, state="hidden")
+        rsx, rsy = dndHandl.getWidgetCursorPos(event, self)
+        x1, y1, x2, y2 = self["widget"].bbox(self._outlineID)  # WICHTIG .id impl
+        self["widget"].move(self._outlineID, rsx-x1, rsy-y1)
+    def _onDndLeave(self, dndHandl, event):
+        self.getTkMaster().setFocus()
+        self["widget"].delete(self._outlineID)
+        self["widget"]["dnd_canvas"] = None
+        self._outlineID = None
+    def _onDndCommit(self, dndHandl, event):
+        self._onDndLeave(dndHandl, event)
+        rsx, rsy = dndHandl.getWidgetCursorPos(event, self)
+        self.attachWidgetCreator(dndHandl.widget, rsx, rsy)
+
+    def disableDrag(self):
+        self["drag_enabled"] = False
+    def enableDrag(self):
+        self["drag_enabled"] = True
+    def setWidgetHiddenWhileDrag(self, b:bool=True):
+        self["hide_widg_on_drag"] = bool(b)
+        return self
+
+    def attachWidget(self, widget:Widget, x=0, y=0, width=None, height=None):
+        """
+        Attaches a widget to be dragged on this canvas.
+        Only on this canvas. If multi-canvas dragging is needed use 'DndCanvas.attachWidgetCreator' method.
+        """
+        if "dnd_canvas" not in widget._data.keys():
+            widget["dnd_canvas"] = None
+        if widget["dnd_canvas"] is None: # register
+            _id = self._get().create_window(x, y, window=widget._get(), anchor="nw")
+            widget["dnd_canvas"] = _DndHandler(self, _id, widget, None)
+            widget.bind(widget["dnd_canvas"].press, "<ButtonPress>", priority=10)
+        else:
+            widget["dnd_canvas"].canvas._get().delete(widget["dnd_canvas"].id)
+            _id = self._get().create_window(x, y, width=width, height=height, window=widget._get(), anchor="nw")
+            widget["dnd_canvas"].id = _id
+
+
+    def attachWidgetCreator(self, widgetCreator:Callable, x=0, y=0):
+        """
+        Attaches a function which creates a widget.
+        This widget can be dragged around on this canvas and to other canvases.
+        Attach the widget again if you need to change any widget attribute.
+
+        The passed function have to look like this:
+
+        def function(root):
+            label = Label(root)
+            ...
+            return label
+
+        @param widgetCreator: function to create dragged widget.
+        @param x: x position of widget.
+        @param y: y position of widget.
+        @return:
+        """
+        if isinstance(widgetCreator, Widget):
+            _widget = widgetCreator
+            widgetCreator = widgetCreator["dnd_canvas"].widgetCreator
+            self.detachWidget(_widget)
+        widget = widgetCreator(self)
+        # check and register variables
+        if "dnd_canvas" not in widget._data.keys():
+            widget["dnd_canvas"] = None
+        # check if already registered to this canvas
+        if widget["dnd_canvas"] is not None:
+            if widget["dnd_canvas"].widget.getID() == self.getID():
+                return
+            self.detachWidget(widget)
+        _id = self._get().create_window(x, y, window=widget._get(), anchor="nw")
+        widget["dnd_canvas"] = _DndHandler(self, _id, widget, widgetCreator)
+        widget.bind(widget["dnd_canvas"].press, "<ButtonPress>", priority=10)
+    def detachWidget(self, widget:Widget):
+        if "dnd_canvas" not in widget._data.keys():
+            widget["dnd_canvas"] = None
+        if widget["dnd_canvas"] is not None:
+            widget["dnd_canvas"].canvas._get().delete(widget["dnd_canvas"].id)
+            widget["registry"].unregisterType("<ButtonPress>")
+            print("destroy")
+            widget._get().destroy()
+
 class CanvasObject:
     def __init__(self, _ins, _data, group):
         if group is not None:
@@ -3581,12 +5499,10 @@ class CanvasObject:
         return self._data[item]
     def __setitem__(self, key, value):
         self._data[key] = value
-    def getType(self):
-        return type(self._ins)
     def bind(self, func, event: Union[EventType, Key, Mouse], args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
         if event == "CANCEL": return
         assert self["objID"] is not None, "Render canvasObj before binding!"
-        EventHandler._registerNewTagBind(self, self["objID"], func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
+        _EventHandler._registerNewTagBind(self, self["objID"], func, event, args, priority, defaultArgs=defaultArgs, disableArgs=disableArgs)
     def render(self, updatePos=False):
         assert self["loc1"] is not None, "Location must be defined use .setLocation()!"
         assert self["loc2"] is not None or (self["width"] is not None and self["height"] is not None), "Location2 or width and height must be defined!"
@@ -4015,5 +5931,6 @@ class MenuPage(Frame):
     def onHide(self):
         pass
 
+#redundant class names
 Combobox = DropdownMenu
 Menu = TaskBar
