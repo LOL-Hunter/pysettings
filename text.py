@@ -1,7 +1,6 @@
 import os
 import time as t
 from enum import Enum
-
 import colorama as co
 import pyfiglet as py
 import termcolor as c
@@ -55,25 +54,23 @@ class TextColor:
                 @return:
                 """
 
-        colors = {'§W':Color.WHITE,
-                  '§B':Color.BLACK,
-                  '§INFO':"info",
-                  '§r':Color.RED,
-                  '§g':Color.GREEN,
-                  '§b':Color.BLUE,
-                  '§c':Color.CYAN,
-                  '§y':Color.YELLOW,
-                  '§m':Color.MAGENTA}
-        __text = ""
+        colors = {'§W':Color.WHITE.value,
+                  '§B':Color.BLACK.value,
+                  '§r':Color.RED.value,
+                  '§g':Color.GREEN.value,
+                  '§b':Color.BLUE.value,
+                  '§c':Color.CYAN.value,
+                  '§y':Color.YELLOW.value,
+                  '§m':Color.MAGENTA.value}
         text = text.replace("§INFO", t.strftime("§g[INFO-%H:%M:%S]: "))
         text = text.replace("§ERROR", t.strftime("§r[ERROR-%H:%M:%S]: "))
         text = text.replace("§WARN", t.strftime("§y[WARNING-%H:%M:%S]: "))
-        for i, textSection in enumerate(text.split("§")[1:]):
-            color, subText = textSection[0], textSection[1:]
-            if "§"+color not in colors.keys():
-                continue
-            __text+=TextColor.get(subText, colors["§"+color])
-        return __text+TextColor.get("", Color.BLACK)
+
+        fmt_str = "\033[%dm"
+        for k, v in zip(colors.keys(), colors.values()):
+            while k in text:
+                text = text.replace(k, fmt_str % c.COLORS[v])
+        return text
     @staticmethod
     def getStrf(text):
         return TextColor._strf(text)
@@ -109,21 +106,21 @@ class MsgText:
     def info(msg, strf=False):
         _text = t.strftime("[INFO-%H:%M:%S]: ")+str(msg)
         Log._write(_text)
-        if not strf: TextColor.print(_text, Color.GREEN.value)
+        if not strf: TextColor.print(_text, Color.GREEN)
         else: TextColor.printStrf("§g"+_text)
     @staticmethod
     def warning(msg):
         _text = t.strftime("[WARNING-%H:%M:%S]: ")+str(msg)
         Log._write(_text)
-        TextColor.print(_text, Color.YELLOW.value)
+        TextColor.print(_text, Color.YELLOW)
     @staticmethod
     def help(msg):
-        TextColor.print("[HELP]: " + str(msg), Color.YELLOW.value)
+        TextColor.print("[HELP]: " + str(msg), Color.YELLOW)
     @staticmethod
     def error(msg, exit_=False):
         _text = t.strftime("[ERROR-%H:%M:%S]: ") + str(msg)
         Log._write(_text)
-        TextColor.print(_text, Color.RED.value)
+        TextColor.print(_text, Color.RED)
         if exit_:
             Log._write("="*5+"SystemExit by MsgText-error"+"="*5)
             Log.save()
@@ -131,5 +128,4 @@ class MsgText:
 
 
 if __name__ == '__main__':
-    TextColor.printStrf("§rHallo§gWelt")
-    print("hi")
+    TextColor.printStrf("123§rHallo§gWelt")

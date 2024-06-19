@@ -1,5 +1,23 @@
 import time as t
 import random as rd
+from pysettings.text import MsgText
+
+def timerBenchmark(func, times=10):
+    timings = []
+    for i in range(times):
+        startTime = t.time()
+        MsgText.info(f"Starting benchmark [{i}/{times}]...")
+        c = 0
+        while True:
+            func()
+            c += 1
+            if t.time()-startTime > 1:
+                timings.append(c)
+                break
+        MsgText.info(f"Starting benchmark [{i}/{times}] ended! Times run in one sec {c}")
+    MsgText.info(f"\n=== Benchmark End ===")
+    timings.sort()
+    MsgText.info(f"Average run Time: {sum(timings) / len(timings)}")
 
 def iterDict(__iterable:dict):
     return zip(__iterable.keys(), __iterable.values())

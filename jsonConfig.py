@@ -1,6 +1,4 @@
-import os, json
-
-import pysettings as pysettings
+import json, os
 
 try:
     from .text import MsgText, TextColor
@@ -46,21 +44,22 @@ class _JsonConfig:
             self.data = d.data
         return self
     def saveConfig(self, beauty=True):
-        file = open(self.path, "w")
         if beauty:
-            file.write(json.dumps(self.data, indent=4))
+            con = json.dumps(self.data, indent=4)
         else:
-            file.write(json.dumps(self.data))
+            con = json.dumps(self.data)
+        file = open(self.path, "w")
+        file.write(con)
         file.close()
     def toString(self, beauty=False):
         if beauty:
             return json.dumps(self.data, indent=4)
         else:
             return json.dumps(self.data)
-
+    def setPath(self, path:str):
+        self.path = path
     def getPath(self):
         return self.path
-
 
 class JsonConfig:
     @staticmethod
@@ -134,9 +133,6 @@ class JsonConfig:
             return err
         return data
 
-
-
-
 class AdvancedJsonConfig:
     _FOLDER = None
     def __init__(self, name):
@@ -173,7 +169,7 @@ class AdvancedJsonConfig:
         else:
             file.write(json.dumps(self.data))
         file.close()
-    def get(self, key, std):
+    def get(self, key:str, std):
         if key in self.data.keys():
             return self[key]
         else:
@@ -189,7 +185,7 @@ class AdvancedJsonConfig:
         if AdvancedJsonConfig._FOLDER is not None: self._path = os.path.join(AdvancedJsonConfig._FOLDER, name)
         else: self._path = name
         if not JsonConfig.isConfigAvailable(self._path):
-            MsgText.warning("NewFileConfig is missing! Creating blank config at: " + self._path)
+            MsgText.warning("Configfile is missing! Creating blank config at: " + self._path)
             config = JsonConfig.loadConfig(self._path, True)
             config.setData(self._std)
             config.saveConfig(True)
