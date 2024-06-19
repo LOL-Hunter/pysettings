@@ -137,16 +137,12 @@ class CompleterEntry(tk.Entry):
 
         else:
             raise tk.TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + ", Frame or Tk instance not: " + str(_master.__class__.__name__))
-
     def _up(self, e):
         pass
     def _down(self, e):
         pass
-
-
     def _setEntryText(self, e):
         self.addText(e.getValue())
-
     def _updateMenu(self, e, out):
         if out is None or self._rect is None or out == []:
             self._listBox.placeForget()
@@ -154,15 +150,11 @@ class CompleterEntry(tk.Entry):
         self._listBox.place(self._rect)
         self._listBox.clear()
         self._listBox.addAll(out)
-
-
     def _decryptEvent(self, args):
         return args
-
     def onUserInputEvent(self, func, args:list=None, priority:int=0, defaultArgs=False, disableArgs=False):
         event = tk.EventHandler._registerNewEvent(self, func, tk.EventType.KEY_UP, args, priority, decryptValueFunc=self._decryptEvent, defaultArgs=defaultArgs, disableArgs=disableArgs)
         event["afterTriggered"] = self._updateMenu
-
     def place(self, x=None, y=None, width=None, height=None, anchor:tk.Anchor=tk.Anchor.UP_LEFT):
         assert not self["destroyed"], "The widget has been destroyed and can no longer be placed."
         if x is None: x = 0
