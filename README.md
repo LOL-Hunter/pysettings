@@ -17,7 +17,7 @@ Note: Unfortunately there is no pip entry yet.
 This sub package is a wrapper around tkinter. \
 It provides several features to used tkinter a lot faster and easier. \
 This sub package is usable as standalone version: \
-For further documentation refer to [simpletk](https://github.com/LOL-Hunter/tksimple).
+For further documentation refer to the standalone verion [simpletk](https://github.com/LOL-Hunter/tksimple).
 
 ### pysettings.geometry
 ##### Location2D
