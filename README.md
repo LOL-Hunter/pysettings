@@ -15,8 +15,7 @@ Note: This library is unfortunately not registered in pip yet.
 ## Documentation
 ### pysettings.tk
 This sub package is a wrapper around tkinter. \
-It provides several features to used tkinter a lot faster and easier. \
-This sub package is usable as standalone version: \
+It provides several features to use tkinter a lot faster and easier. \
 For further documentation refer to the standalone version [simpletk](https://github.com/LOL-Hunter/tksimple).
 
 ### pysettings.geometry
