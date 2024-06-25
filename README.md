@@ -3,7 +3,7 @@ This python library is used in many of my projects. \
 It provides several useful features listed and documented below.
 
 ## Installation
-Note: Unfortunately there is no pip entry yet.
+Note: This library is unfortunately not registered in pip yet.
 
 * Download Repos
 * Unzip folder
@@ -17,7 +17,7 @@ Note: Unfortunately there is no pip entry yet.
 This sub package is a wrapper around tkinter. \
 It provides several features to used tkinter a lot faster and easier. \
 This sub package is usable as standalone version: \
-For further documentation refer to the standalone verion [simpletk](https://github.com/LOL-Hunter/tksimple).
+For further documentation refer to the standalone version [simpletk](https://github.com/LOL-Hunter/tksimple).
 
 ### pysettings.geometry
 ##### Location2D
