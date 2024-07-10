@@ -1117,7 +1117,6 @@ class Tk:
 
     """
     def __init__(self, _master=None, group=None):
-        if group is not None: group.add(self)
         self.setAllwaysOnTop = self.setTopmost
         self.title = self.setTitle
         self.quit = self.quitMainLoop
@@ -1135,6 +1134,7 @@ class Tk:
             self._data = _master._data
         else:
             raise TKExceptions.InvalidWidgetTypeException("_master must be " + str(self.__class__.__name__) + " instance not: " + str(_master.__class__.__name__))
+        if group is not None: group.add(self)
     def __str__(self):
         return str(self.__class__.__name__)+"("+str(self._data)+")"
     def __getitem__(self, item):
