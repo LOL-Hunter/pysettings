@@ -136,7 +136,7 @@ conf.setPath("/config/data.json")
 save config.
 ```python
 conf.saveConfig(True) # (Default) json syntax is written in multiple lines.
-conf.saveConfig(True) # json syntax is written in one line.
+conf.saveConfig(False) # json syntax is written in one line.
 ```
 #### AdvancedJsonConfig
 This feature is useful if multiple config files are used from one folder. \
