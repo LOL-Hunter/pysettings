@@ -142,7 +142,7 @@ conf.saveConfig(False) # json syntax is written in one line.
 This feature is useful if multiple config files are used from one folder. \
 if this config file gets deleted or corrupted it gets recreated with default data automatically.
 
-Example.
+Example:
 ```python
 
 AdvancedJsonConfig.setConfigFolderPath("/config")
