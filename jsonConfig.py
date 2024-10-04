@@ -58,6 +58,7 @@ class _JsonConfig:
             return json.dumps(self.data)
     def setPath(self, path:str):
         self.path = path
+        return self
     def getPath(self):
         return self.path
 
