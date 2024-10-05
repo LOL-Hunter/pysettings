@@ -15,10 +15,13 @@ class _JsonConfig:
     def __setitem__(self, key, value):
         self.data[key] = value
     def __getitem__(self, item):
-        if list(self.data.keys()).__contains__(item):
-            return self.data[item]
+        if type(self.data) is dict:
+            if list(self.data.keys()).__contains__(item):
+                return self.data[item]
+            else:
+                return None
         else:
-            return None
+            return self.data[item]
     def __repr__(self):
         return str(self.data)
     def keys(self):
