@@ -1,11 +1,9 @@
 import json, os
-
+from tksimple import SimpleDialog
 try:
     from .text import MsgText, TextColor
-    from .tk import SimpleDialog
 except ImportError:
     from pysettings.text import MsgText, TextColor
-    from pysettings.tk import SimpleDialog
 
 class _JsonConfig:
     def __init__(self, data, path):
